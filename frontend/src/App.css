@@ -1,0 +1,66 @@
+* { margin: 0; padding: 0; }
+
+a { color: var(--blue); text-decoration: none; }
+a:hover { opacity: 0.8; }
+
+button { font-family: var(--font); }
+
+/* ── Buttons ─────────────────────────────────────── */
+.btn-primary {
+  display: inline-flex; align-items: center; gap: 5px;
+  background: var(--accent); color: white;
+  border: none; border-radius: var(--r-sm);
+  padding: 7px 14px; font-size: 13px; font-weight: 500;
+  cursor: pointer; transition: background 0.15s; white-space: nowrap;
+  font-family: var(--font);
+}
+.btn-primary:not(:disabled):hover { background: var(--accent-hover); }
+.btn-primary:disabled { opacity: 0.38; cursor: not-allowed; }
+
+.btn-secondary {
+  display: inline-flex; align-items: center; gap: 5px;
+  background: var(--surface-2); color: var(--t2);
+  border: 1px solid var(--border-2); border-radius: var(--r-sm);
+  padding: 7px 14px; font-size: 13px; font-weight: 500;
+  cursor: pointer; transition: all 0.15s;
+  font-family: var(--font);
+}
+.btn-secondary:not(:disabled):hover { color: var(--t1); background: var(--surface-3); }
+.btn-secondary:disabled { opacity: 0.38; cursor: not-allowed; }
+
+.btn-danger {
+  display: inline-flex; align-items: center; gap: 5px;
+  background: transparent; color: var(--red);
+  border: 1px solid rgba(245,90,90,0.28); border-radius: var(--r-sm);
+  padding: 5px 10px; font-size: 12px; font-weight: 500;
+  cursor: pointer; transition: background 0.15s;
+  font-family: var(--font);
+}
+.btn-danger:not(:disabled):hover { background: var(--red-dim); }
+.btn-danger:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* ── Inputs ──────────────────────────────────────── */
+input, textarea {
+  background: var(--surface);
+  border: 1px solid var(--border-2);
+  border-radius: var(--r-sm);
+  color: var(--t1);
+  padding: 8px 12px;
+  font-size: 13px;
+  font-family: var(--font);
+  width: 100%;
+  outline: none;
+  transition: border-color 0.15s;
+}
+input:focus, textarea:focus { border-color: var(--accent); }
+input::placeholder, textarea::placeholder { color: var(--t3); }
+
+/* ── Badge / Tag ─────────────────────────────────── */
+.tag {
+  display: inline-flex; align-items: center; gap: 4px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 2px 8px; font-size: 11px; font-weight: 500;
+  color: var(--t2); white-space: nowrap;
+}
