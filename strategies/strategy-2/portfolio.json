@@ -8,25 +8,11 @@
       "note": "Elon Musk 90-114 tweets May28-30 | prob=0.9595 days=2 score=79"
     },
     {
-      "token_id": "10685543194403290811346738569857155939094052769456474761574026793136996319084",
-      "outcome": "No",
-      "shares": 50.1,
-      "cost_usdc": 50.0,
-      "note": "WTI Crude $65 LOW week of May25 | prob=0.969 days=1 score=78"
-    },
-    {
       "token_id": "40612471379175543257454686269876903661266624554019736329691040922411085126433",
       "outcome": "No",
       "shares": 51.07,
       "cost_usdc": 50.0,
       "note": "Colombia - Paloma Valencia 2nd place 1st round | prob=0.9605 days=3 score=78"
-    },
-    {
-      "token_id": "35265428869547543607547124261519527012893977127530478437268736088424282787706",
-      "outcome": "No",
-      "shares": 51.18,
-      "cost_usdc": 50.0,
-      "note": "Milan 最高气温 28°C on May29 | prob=0.970 days=1 score=77"
     },
     {
       "token_id": "6188011265163920573991374597923023857028858291340293259939266440570731871125",

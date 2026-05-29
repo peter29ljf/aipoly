@@ -87,3 +87,49 @@
 4. Milan 最高气温 28°C on May29 | No | 到期 05-29（今日）
 5. Park Chan-dae 仁천시장 당선 | Yes | 到期 06-03 ← 새로 매수
 6. Josh Turek Iowa 상원 후보 | Yes | 到期 06-02 ← 새로 매수
+
+
+## 2026-05-29 第二次检查（12h 定时执行）
+
+### 余额状态
+- 当前余额：$613.42（较预期 $1,063.95 低，原因：早期历史持仓消耗）
+- ⚠️ USDC 授权额度（allowance）= 0.0，可能影响后续买入，需关注
+
+### 持仓更新
+- **WTI Crude $65 LOW week of May25 No**：今日到期，尚未结算（redeemable=false），当前价 0.9795，轻微浮亏 -$0.93 → 从 portfolio 移除记录
+- **Milan 最高气温 28°C on May29 No**：今日到期，尚未结算，当前价 0.9555，浮亏 -$1.15 → 从 portfolio 移除记录
+
+### 扫描结果（4 个候选，全部重复）
+| 标的 | 概率 | 状态 |
+|------|------|------|
+| Park Chan-dae Yes | 95.2% | ❌ 已持有 |
+| Yoo Jeong-bok No | 95.6% | ❌ Park 互补仓（等同已持有）|
+| Josh Turek Yes | 93.5% | ❌ 已持有 |
+| Zach Wahls No | 92.5% | ❌ Turek 互补仓（等同已持有）|
+
+**今日买入：0 笔（无新候选）**
+
+### 链上全仓状态摘要（17 个位置）
+| 标的 | 方向 | 当前价 | PnL | 到期 |
+|------|------|--------|-----|------|
+| BTC $70k | No | 0.9255 | **+$8.39** | 06-01 |
+| Elon Musk tweets | No | 0.9825 | +$1.17 | 05-30 |
+| Israeli parliament No | No | 0.9975 | +$0.94 | 05-31 |
+| Texas turnout No | No | 0.993 | +$1.19 | ~~05-26~~ 待结算 |
+| Colombia 系列 (×5) | No | 各异 | 混合 | 05-31 |
+| Jared Kushner Iran No | No | 0.9875 | +$0.02 | 05-31 |
+| Park Chan-dae Yes | Yes | 0.952 | +$0.16 | 06-03 |
+| Josh Turek Yes | Yes | 0.935 | -$0.27 | 06-02 |
+| Zach Wahls No | No | 0.925 | -$0.27 | 06-02 |
+| Milan 28°C No | No | 0.9555 | -$1.15 | **05-29 到期** |
+| WTI $65 No | No | 0.9795 | -$0.93 | **05-29 到期** |
+| **Nithya Raman No** | No | **0.805** | **-$7.63** ⚠️ | 06-02 |
+
+### 活跃 strategy-2 持仓（4 笔）
+1. Elon Musk 90-114 tweets May28-30 | No | 到期 05-30 | 当前 0.9825 +$1.17
+2. Colombia Paloma Valencia 2nd place | No | 到期 05-31 | 当前 0.9705 -$0.43
+3. Park Chan-dae 인천시장 당선 | Yes | 到期 06-03 | 当前 0.952 +$0.16
+4. Josh Turek Iowa 상원 후보 | Yes | 到期 06-02 | 当前 0.935 -$0.27
+
+### 下次执行
+UTC 12:00（北京时间 20:00），预计扫描新标的

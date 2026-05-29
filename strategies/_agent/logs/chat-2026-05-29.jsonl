@@ -1,0 +1,3 @@
+{"kind": "user", "content": "卖出what-price-will-bitcoin-hit-in-may-2026 70000 一半仓位", "ts": "2026-05-29T13:11:17.311447+00:00"}
+{"kind": "run_started", "trigger": "chat", "extra": {"user_message": "卖出what-price-will-bitcoin-hit-in-may-2026 70000 一半仓位"}, "ts": "2026-05-29T13:11:17.314821+00:00"}
+{"kind": "run_error", "error": "Separator is found, but chunk is longer than limit", "ts": "2026-05-29T13:11:26.173451+00:00"}

@@ -15,8 +15,11 @@
 ```json
 [
   {
+    "alert_id": 6,
     "market_slug": "will-bitcoin-dip-to-70k-in-may-2026-438-356-919",
-    "side": "no",
+    "token_id": "95485861341380608519980927436620979639471363690968268890982766249775308601106",
+    "outcome": "No（↓70,000 不会跌到）",
+    "direction": "below",
     "trigger_price": 0.05,
     "added": "2026-05-28",
     "action": {
@@ -24,19 +27,16 @@
       "market_slug": "what-price-will-bitcoin-hit-before-2027",
       "outcome": "55000",
       "side": "no",
-      "amount_usdc": 50,
-      "note": "当 will-bitcoin-dip-to-70k No 价格跌至 0.05 时，立即买入 what-price-will-bitcoin-hit-before-2027 55000 No"
-    },
-    "note": "监控 will-bitcoin-dip-to-70k No 价格，触达 0.05 后执行条件买入"
+      "amount_usdc": 300,
+      "note": "当 will-bitcoin-dip-to-70k No 价格跌至 0.05 时，立即买入 what-price-will-bitcoin-hit-before-2027 55000 No（300 USDC）"
+    }
   }
 ]
 ```
 
 ## 最近对话记录
-[user] 监控will-bitcoin-dip-to-70k-in-may-2026-438-356-919，no
-[ai] 已将该市场 No 方向加入活跃价格警报
-[user] 修改策略，监控will-bitcoin-dip-to-70k-in-may-2026-438-356-919，no 的价格到 0.05 的时候，立即买入what-price-will-bitcoin-hit-before-2027 的 55000 的no
-[ai] 已更新为条件买入警报：当 will-bitcoin-dip-to-70k No 价格 ≤ 0.05 时，立即买入 what-price-will-bitcoin-hit-before-2027 55000 No（$50 USDC）
+[user] 修改策略并设置警报：当what-price-will-bitcoin-hit-in-may-2026 70000 no 这个token 价格到了0.05，买入what-price-will-bitcoin-hit-before-2027 55000 No 300usdc
+[ai] 已设置价格警报（ID: 6）：监控 will-bitcoin-dip-to-70k No token，价格跌至 0.05 时触发，执行买入 what-price-will-bitcoin-hit-before-2027 55000 No 300 USDC
 
 
 ## 当前持仓
@@ -46,25 +46,23 @@
 
 ## 活跃价格警报
 ```json
-（无活跃警报）
+[
+  {
+    "id": 6,
+    "sid": "btc",
+    "token_id": "95485861341380608519980927436620979639471363690968268890982766249775308601106",
+    "target": 0.05,
+    "direction": "below",
+    "status": "active",
+    "note": "触发后立即买入 what-price-will-bitcoin-hit-before-2027 55000 No，金额 300 USDC",
+    "created_at": "2026-05-28T11:35:48.365554+00:00",
+    "fired_at": null,
+    "fired_price": null
+  }
+]
 ```
 
 ## 最近对话记录
-[run_done] 
-[user] 重新用mcp重新设置警报，购买数量改成 300usdc
-[run_started] 
-[text] 无法设置此警报。`will-bitcoin-dip-to-70k-in-may-2026-438-356-919` 返回 **"未找到开放赛事"**，原因是：
-
-- 今天是 2026-05-28，该市场（"BTC 5月内跌至70k"）**已临近到期或已结算**，不再是开放市场
-- Polymarket 只能对开放交易中的市场设置价格警报
-
-**需要你决定下一步：**
-
-1. **放弃该警报** — 市场已过期，逻辑失效
-2. **换一个监控标的** — 如果你想继续条件买入 `what-price-will-bitcoin-hit-before-2027 55000 No`，可以改为监控另一个 BTC 相关市场的价格信号
-3. **直接查当前价格后手动决定** — 我可以立刻查 `what-price-will-bitcoin-hit-before-2027 55000 No` 的现价，你看是否值得直接入场
-
-请告诉我如何处理？
 [run_done] 
 [user] 查what-price-will-bitcoin-hit-in-may-2026 70000 no 这个token
 [run_started] 
@@ -81,9 +79,23 @@
 需要查这个 token 的当前价格或挂单簿吗？
 [run_done] 
 [user] 修改策略并设置警报：当what-price-will-bitcoin-hit-in-may-2026 70000 no 这个token 价格到了0.05，买入what-price-will-bitcoin-hit-before-2027 55000 No 300usdc
+[run_started] 
+[text] 已完成：
+
+| 项目 | 详情 |
+|------|------|
+| **警报 ID** | 6 |
+| **监控 token** | `will-bitcoin-dip-to-70k-in-may-2026` 70000 No |
+| **触发条件** | 价格跌破 **0.05** |
+| **触发后动作** | 买入 `what-price-will-bitcoin-hit-before-2027` 55000 No，**300 USDC** |
+| **状态** | active |
+
+价格警报已在后端激活，当该 token 价格 ≤ 0.05 时会自动唤起策略执行买入。
+[run_done] 
+[user] 卖出what-price-will-bitcoin-hit-in-may-2026 70000 一半仓位
 
 ## 用户当前消息
-修改策略并设置警报：当what-price-will-bitcoin-hit-in-may-2026 70000 no 这个token 价格到了0.05，买入what-price-will-bitcoin-hit-before-2027 55000 No 300usdc
+卖出what-price-will-bitcoin-hit-in-may-2026 70000 一半仓位
 
 ---
 你是一个 Polymarket 自动交易 AI。根据上述策略说明和当前状态，决定下一步操作。
