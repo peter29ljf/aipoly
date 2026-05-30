@@ -339,6 +339,124 @@ function AgentChat() {
   )
 }
 
+// ─── Cleanup progress modal ───────────────────────────────────────────────────
+
+interface CleanupStep { type: string; message: string; ts?: string }
+
+function CleanupModal({ sid, name, onDone }: { sid: string; name: string; onDone: () => void }) {
+  const [steps, setSteps] = useState<CleanupStep[]>([])
+  const [done, setDone] = useState(false)
+  const [error, setError] = useState(false)
+  const bottomRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const es = new EventSource(`/api/strategies/${sid}/cleanup-stream`)
+    es.onmessage = (e) => {
+      try {
+        const evt: CleanupStep = JSON.parse(e.data)
+        if (evt.type === 'ping') return
+        setSteps(prev => [...prev, evt])
+        if (evt.type === 'deleted') { setDone(true); es.close() }
+        if (evt.type === 'error') { setError(true); es.close() }
+      } catch {}
+    }
+    es.onerror = () => es.close()
+    return () => es.close()
+  }, [sid])
+
+  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [steps])
+
+  const stepColor = (type: string) =>
+    type === 'deleted' ? 'var(--green)' : type === 'error' ? 'var(--red)' : 'var(--t2)'
+
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, zIndex: 1000,
+      background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+    }}>
+      <div style={{
+        background: 'var(--surface)', border: '1px solid var(--border)',
+        borderRadius: 'var(--r)', width: 480, maxWidth: '92vw',
+        display: 'flex', flexDirection: 'column', overflow: 'hidden',
+        boxShadow: '0 20px 60px rgba(0,0,0,0.5)',
+        animation: 'fade-in 0.2s ease',
+      }}>
+        {/* Header */}
+        <div style={{
+          padding: '16px 20px', borderBottom: '1px solid var(--border)',
+          display: 'flex', alignItems: 'center', gap: 10,
+        }}>
+          <div style={{
+            width: 32, height: 32, borderRadius: '50%', flexShrink: 0,
+            background: 'linear-gradient(140deg, #e8926a, #c05535)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: 14, fontWeight: 700, color: 'white',
+          }}>C</div>
+          <div>
+            <div style={{ fontWeight: 600, color: 'var(--t1)', fontSize: 14 }}>
+              AI 清理中：{name}
+            </div>
+            <div style={{ fontSize: 11, color: 'var(--t3)', marginTop: 2 }}>
+              Claude 正在处理关联数据…
+            </div>
+          </div>
+        </div>
+
+        {/* Steps */}
+        <div style={{
+          flex: 1, overflowY: 'auto', padding: '14px 20px',
+          maxHeight: 320, minHeight: 120,
+          fontFamily: 'var(--mono)', fontSize: 12,
+        }}>
+          {steps.length === 0 && (
+            <div style={{ color: 'var(--t3)', display: 'flex', gap: 5, alignItems: 'center' }}>
+              <span className="typing-dot" />
+              <span className="typing-dot" />
+              <span className="typing-dot" />
+              <span style={{ marginLeft: 4 }}>连接清理服务…</span>
+            </div>
+          )}
+          {steps.map((s, i) => (
+            <div key={i} style={{
+              color: stepColor(s.type), marginBottom: 6, lineHeight: 1.6,
+              animation: 'fade-in 0.15s ease',
+            }}>
+              {s.message}
+            </div>
+          ))}
+          {!done && !error && steps.length > 0 && (
+            <div style={{ display: 'flex', gap: 4, marginTop: 4 }}>
+              <span className="typing-dot" />
+              <span className="typing-dot" />
+              <span className="typing-dot" />
+            </div>
+          )}
+          <div ref={bottomRef} />
+        </div>
+
+        {/* Footer */}
+        <div style={{
+          padding: '12px 20px', borderTop: '1px solid var(--border)',
+          display: 'flex', justifyContent: 'flex-end',
+        }}>
+          {(done || error) ? (
+            <button className="btn-primary" onClick={onDone}>
+              {error ? '关闭' : '完成'}
+            </button>
+          ) : (
+            <span style={{ fontSize: 12, color: 'var(--t3)', alignSelf: 'center' }}>
+              请勿关闭，正在清理…
+            </span>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 export default function HomePage() {
   const [strategies, setStrategies] = useState<Strategy[]>([])
   const [showCreate, setShowCreate] = useState(false)
@@ -346,6 +464,7 @@ export default function HomePage() {
   const [desc, setDesc] = useState('')
   const [loading, setLoading] = useState(false)
   const [tab, setTab] = useState<'agent' | 'strategies'>('agent')
+  const [cleanupTarget, setCleanupTarget] = useState<{ sid: string; name: string } | null>(null)
   const navigate = useNavigate()
 
   const load = () => listStrategies().then(s => setStrategies(s.filter(x => x.id !== AGENT_SID)))
@@ -363,11 +482,13 @@ export default function HomePage() {
     }
   }
 
-  async function handleDelete(sid: string, name: string, e: React.MouseEvent) {
+  async function handleDelete(sid: string, stratName: string, e: React.MouseEvent) {
     e.stopPropagation()
-    if (!confirm(`删除策略「${name}」？\n\n将同时清除所有相关定时任务和价格警报，防止孤儿任务继续触发。\n\n此操作不可恢复。`)) return
+    if (!confirm(`删除策略「${stratName}」？\nClaude 将自动清理关联的定时任务和价格警报。`)) return
     await deleteStrategy(sid)
-    load()
+    // 从列表中先移除，再打开清理进度弹窗
+    setStrategies(prev => prev.filter(s => s.id !== sid))
+    setCleanupTarget({ sid, name: stratName })
   }
 
   const tabStyle = (active: boolean): React.CSSProperties => ({
@@ -380,6 +501,13 @@ export default function HomePage() {
 
   return (
     <div style={{ maxWidth: 880, margin: '0 auto', padding: '32px 20px' }}>
+      {cleanupTarget && (
+        <CleanupModal
+          sid={cleanupTarget.sid}
+          name={cleanupTarget.name}
+          onDone={() => { setCleanupTarget(null); load() }}
+        />
+      )}
 
       {/* Header */}
       <div style={{

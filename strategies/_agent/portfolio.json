@@ -1,3 +1,11 @@
 {
-  "positions": []
+  "positions": [
+    {
+      "token_id": "72561681562752807204440723510542428554177127254755262676597978748589128812538",
+      "outcome": "No",
+      "shares": 72.46,
+      "cost_usdc": 50.0,
+      "note": "↓ 72,500 No | will-bitcoin-dip-to-72500-in-may-2026-from-may-27"
+    }
+  ]
 }

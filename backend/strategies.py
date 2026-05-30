@@ -129,6 +129,82 @@ def get_strategy(sid: str) -> dict | None:
     return meta
 
 
+async def async_cleanup_and_delete(sid: str):
+    """AI 辅助清理策略：发布进度事件到 cleanup:{sid} 频道，最后删除目录。"""
+    import asyncio
+    import shutil
+    import logging
+    from datetime import datetime, timezone
+    from backend.event_bus import event_bus
+    from backend import alerts_db as _alerts, scheduler as _sched, portfolio_io
+    from backend.claude_runner import _find_claude
+
+    channel = f"cleanup:{sid}"
+    log = logging.getLogger(__name__)
+
+    def now():
+        return datetime.now(timezone.utc).isoformat()
+
+    async def pub(message: str, step_type: str = "progress"):
+        await event_bus.publish(channel, {"type": step_type, "message": message, "ts": now()})
+
+    try:
+        await pub("🔍 开始清理策略…")
+
+        # 1. 检查持仓并让 Claude 给出建议
+        positions = portfolio_io.list_positions(sid)
+        if positions:
+            await pub(f"📊 发现 {len(positions)} 笔持仓记录，调用 Claude 分析…")
+            try:
+                claude_bin = _find_claude()
+                pos_summary = ", ".join(f"{p.get('outcome','?')}({p.get('shares',0):.1f}股)" for p in positions[:5])
+                prompt = (
+                    f"策略 {sid} 正在删除清理。当前持仓：{pos_summary}。"
+                    "请用一句话说明这些链上持仓是否需要手动处理（如已到期结算则不需要，未到期则提醒用户自行处理）。"
+                )
+                proc = await asyncio.create_subprocess_exec(
+                    claude_bin, "-p", prompt,
+                    "--output-format", "text",
+                    "--model", "claude-haiku-4-5",
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.DEVNULL,
+                )
+                try:
+                    stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=30)
+                    advice = stdout.decode("utf-8", errors="replace").strip()
+                    if advice:
+                        await pub(f"🤖 Claude：{advice[:200]}")
+                except asyncio.TimeoutError:
+                    proc.kill()
+                    await pub("🤖 Claude 分析超时，跳过")
+            except Exception as e:
+                await pub(f"🤖 Claude 调用失败：{e}，跳过")
+        else:
+            await pub("📊 无持仓记录")
+
+        # 2. 取消价格警报
+        await pub("🔔 取消价格警报…")
+        n_alerts = _alerts.cancel_all_for_strategy(sid)
+        await pub(f"✅ 已取消 {n_alerts} 条价格警报")
+
+        # 3. 移除定时任务
+        await pub("⏰ 移除定时任务…")
+        n_jobs = _sched.remove_jobs_for_sid(sid)
+        await pub(f"✅ 已移除 {n_jobs} 个定时任务")
+
+        # 4. 删除策略目录
+        await pub("🗑️ 删除策略文件…")
+        p = STRATEGIES_DIR / sid
+        if p.exists():
+            shutil.rmtree(p)
+        await pub(f"✅ 策略 {sid} 已完全删除", "deleted")
+        log.info("Async cleanup done for %s: %d alerts, %d jobs", sid, n_alerts, n_jobs)
+
+    except Exception as e:
+        log.exception("Cleanup failed for %s", sid)
+        await pub(f"❌ 清理出错：{e}", "error")
+
+
 def delete_strategy(sid: str) -> bool:
     """删除策略：先清理 DB（警报/定时任务），再删除目录。
     参考 aistock 的顺序：alerts → jobs → directory。
