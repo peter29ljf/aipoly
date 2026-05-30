@@ -130,12 +130,24 @@ def get_strategy(sid: str) -> dict | None:
 
 
 def delete_strategy(sid: str) -> bool:
+    """删除策略目录，并清理所有关联的定时任务和价格警报，防止孤儿任务继续触发。"""
     import shutil
+    import logging
+    from backend import scheduler as _sched, alerts_db as _alerts
     p = STRATEGIES_DIR / sid
-    if p.exists():
-        shutil.rmtree(p)
-        return True
-    return False
+    if not p.exists():
+        return False
+    # 1. 清理 APScheduler 定时任务（防止孤儿任务触发 Claude）
+    removed_jobs = _sched.remove_jobs_for_sid(sid)
+    # 2. 取消所有活跃价格警报
+    cancelled_alerts = _alerts.cancel_all_for_strategy(sid)
+    logging.getLogger(__name__).info(
+        "Deleted strategy %s: removed %d jobs, cancelled %d alerts",
+        sid, removed_jobs, cancelled_alerts,
+    )
+    # 3. 删除文件系统目录
+    shutil.rmtree(p)
+    return True
 
 
 def _rebuild_claude_md(sid: str, user_message: str = ""):

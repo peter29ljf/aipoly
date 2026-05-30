@@ -2,10 +2,101 @@ import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   listStrategies, createStrategy, deleteStrategy,
-  sendMessage, subscribeStream, getChatHistory, type Strategy,
+  sendMessage, subscribeStream, getChatHistory, getMcpHealth,
+  type Strategy, type McpServerStatus,
 } from '../api'
 
 const AGENT_SID = '_agent'
+
+// ─── MCP status bar ──────────────────────────────────────────────────────────
+
+const MCP_LABELS: Record<string, string> = {
+  'poly-trade':   'poly-trade',
+  'portfolio':    'portfolio',
+  'scheduler':    'scheduler',
+  'sweep':        'sweep',
+  'strategy-doc': 'strategy-doc',
+}
+
+function McpStatusBar() {
+  const [data, setData] = useState<Record<string, McpServerStatus> | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  const load = async () => {
+    setLoading(true)
+    try { setData(await getMcpHealth()) }
+    catch { setData(null) }
+    finally { setLoading(false) }
+  }
+
+  useEffect(() => { load() }, [])
+
+  const entries = data ? Object.entries(data) : []
+  const hasError = entries.some(([, v]) => v.status === 'error')
+
+  const chipStyle = (status: string): React.CSSProperties => ({
+    display: 'inline-flex', alignItems: 'center', gap: 5,
+    padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 500,
+    background: status === 'ok' ? 'rgba(74,197,116,0.12)' : status === 'loading' ? 'rgba(148,163,184,0.12)' : 'rgba(255,99,99,0.12)',
+    border: `1px solid ${status === 'ok' ? 'rgba(74,197,116,0.3)' : status === 'loading' ? 'rgba(148,163,184,0.2)' : 'rgba(255,99,99,0.3)'}`,
+    color: status === 'ok' ? '#4ac574' : status === 'loading' ? '#94a3b8' : '#ff6363',
+    whiteSpace: 'nowrap' as const,
+    cursor: 'default',
+  })
+
+  const dotStyle = (status: string): React.CSSProperties => ({
+    width: 6, height: 6, borderRadius: '50%', flexShrink: 0,
+    background: status === 'ok' ? '#4ac574' : status === 'loading' ? '#94a3b8' : '#ff6363',
+  })
+
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap',
+      padding: '8px 0', marginBottom: 20,
+      borderBottom: '1px solid var(--border)',
+    }}>
+      <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--t3)', letterSpacing: 1, textTransform: 'uppercase', marginRight: 4 }}>
+        MCP
+      </span>
+      {loading && !data && (
+        <span style={chipStyle('loading')}><span style={dotStyle('loading')} />检查中…</span>
+      )}
+      {entries.map(([key, val]) => {
+        const label = MCP_LABELS[key] ?? key
+        const title = val.detail || ''
+        const statusStr = loading ? 'loading' : val.status
+        return (
+          <span key={key} style={chipStyle(statusStr)} title={title}>
+            <span style={dotStyle(statusStr)} />
+            {label}
+            {key === 'scheduler' && val.jobs != null && (
+              <span style={{ opacity: 0.7 }}>({val.jobs})</span>
+            )}
+            {val.status === 'error' && val.detail && (
+              <span style={{ opacity: 0.8 }}>— {val.detail}</span>
+            )}
+          </span>
+        )
+      })}
+      {!loading && (
+        <button
+          onClick={load}
+          title="刷新 MCP 状态"
+          style={{
+            marginLeft: 'auto', background: 'none', border: 'none',
+            color: 'var(--t3)', fontSize: 14, cursor: 'pointer', padding: '2px 6px',
+            borderRadius: 6, transition: 'color 0.15s',
+          }}
+          onMouseEnter={e => { e.currentTarget.style.color = 'var(--t1)' }}
+          onMouseLeave={e => { e.currentTarget.style.color = 'var(--t3)' }}
+        >↺</button>
+      )}
+      {!loading && hasError && (
+        <span style={{ fontSize: 11, color: '#ff6363', marginLeft: 4 }}>部分 MCP 未运行</span>
+      )}
+    </div>
+  )
+}
 
 function isStillRunning(history: any[]): boolean {
   for (let i = history.length - 1; i >= 0; i--) {
@@ -272,9 +363,9 @@ export default function HomePage() {
     }
   }
 
-  async function handleDelete(sid: string, e: React.MouseEvent) {
+  async function handleDelete(sid: string, name: string, e: React.MouseEvent) {
     e.stopPropagation()
-    if (!confirm(`删除策略 "${sid}"？此操作不可恢复。`)) return
+    if (!confirm(`删除策略「${name}」？\n\n将同时清除所有相关定时任务和价格警报，防止孤儿任务继续触发。\n\n此操作不可恢复。`)) return
     await deleteStrategy(sid)
     load()
   }
@@ -315,7 +406,7 @@ export default function HomePage() {
       </div>
 
       {/* Tabs */}
-      <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', marginBottom: 26 }}>
+      <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', marginBottom: 16 }}>
         <button style={tabStyle(tab === 'agent')} onClick={() => setTab('agent')}>
           🤖 全局助手
         </button>
@@ -323,6 +414,9 @@ export default function HomePage() {
           📋 我的策略{strategies.length > 0 ? ` (${strategies.length})` : ''}
         </button>
       </div>
+
+      {/* MCP health bar */}
+      <McpStatusBar />
 
       {/* ── Agent tab ── */}
       {tab === 'agent' && <AgentChat />}
@@ -429,7 +523,7 @@ export default function HomePage() {
                     <button
                       className="btn-danger"
                       style={{ fontSize: 11 }}
-                      onClick={e => handleDelete(s.id, e)}
+                      onClick={e => handleDelete(s.id, s.name, e)}
                     >删除</button>
                     <span style={{ color: 'var(--t3)', fontSize: 16 }}>›</span>
                   </div>

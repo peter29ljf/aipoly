@@ -79,6 +79,19 @@ def cancel_alert(alert_id: int) -> bool:
         return cur.rowcount > 0
 
 
+def cancel_all_for_strategy(sid: str) -> int:
+    """取消某策略的所有活跃警报，返回取消数量。策略删除时调用。"""
+    with _conn() as c:
+        cur = c.execute(
+            "UPDATE alerts SET status='cancelled' WHERE sid=? AND status='active'", (sid,)
+        )
+        n = cur.rowcount
+        if n:
+            import logging
+            logging.getLogger(__name__).info("Cancelled %d orphaned alerts for strategy=%s", n, sid)
+        return n
+
+
 def list_alerts(sid: str) -> list[dict]:
     with _conn() as c:
         rows = c.execute("SELECT * FROM alerts WHERE sid=? ORDER BY created_at DESC", (sid,)).fetchall()

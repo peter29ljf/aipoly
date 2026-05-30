@@ -97,3 +97,18 @@ def cancel_job(job_id: str) -> bool:
         return True
     except Exception:
         return False
+
+
+def remove_jobs_for_sid(sid: str) -> int:
+    """删除某策略的所有定时任务，返回删除数量。策略删除时调用。"""
+    sch = get_scheduler()
+    removed = 0
+    for job in sch.get_jobs():
+        if job.id.startswith(sid + "-") or job.id.startswith(sid + "_"):
+            try:
+                sch.remove_job(job.id)
+                removed += 1
+                logger.info("Removed orphaned job %s (strategy=%s)", job.id, sid)
+            except Exception:
+                pass
+    return removed

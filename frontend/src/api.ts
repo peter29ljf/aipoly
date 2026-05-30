@@ -138,3 +138,16 @@ export async function writeStrategyDoc(sid: string, content: string): Promise<vo
     body: JSON.stringify({ content }),
   })
 }
+
+// ── Health ────────────────────────────────────────────────────────────────────
+
+export interface McpServerStatus {
+  status: 'ok' | 'error'
+  detail?: string
+  jobs?: number | null
+}
+
+export async function getMcpHealth(): Promise<Record<string, McpServerStatus>> {
+  const r = await fetch(`${BASE}/api/health/mcp`)
+  return r.json()
+}
