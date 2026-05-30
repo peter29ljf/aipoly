@@ -130,24 +130,36 @@ def get_strategy(sid: str) -> dict | None:
 
 
 def delete_strategy(sid: str) -> bool:
-    """删除策略目录，并清理所有关联的定时任务和价格警报，防止孤儿任务继续触发。"""
+    """删除策略：先清理 DB（警报/定时任务），再删除目录。
+    参考 aistock 的顺序：alerts → jobs → directory。
+    即使目录已不存在，也会清理 DB 孤儿数据。
+    """
     import shutil
     import logging
     from backend import scheduler as _sched, alerts_db as _alerts
     p = STRATEGIES_DIR / sid
-    if not p.exists():
-        return False
-    # 1. 清理 APScheduler 定时任务（防止孤儿任务触发 Claude）
-    removed_jobs = _sched.remove_jobs_for_sid(sid)
-    # 2. 取消所有活跃价格警报
+    log = logging.getLogger(__name__)
+
+    # 1. 取消所有活跃价格警报（无论目录是否存在）
     cancelled_alerts = _alerts.cancel_all_for_strategy(sid)
-    logging.getLogger(__name__).info(
-        "Deleted strategy %s: removed %d jobs, cancelled %d alerts",
-        sid, removed_jobs, cancelled_alerts,
-    )
-    # 3. 删除文件系统目录
-    shutil.rmtree(p)
-    return True
+
+    # 2. 移除 APScheduler 定时任务（防止孤儿任务继续触发）
+    removed_jobs = _sched.remove_jobs_for_sid(sid)
+
+    log.info("Cleanup for %s: cancelled %d alerts, removed %d jobs", sid, cancelled_alerts, removed_jobs)
+
+    # 3. 删除文件系统目录（目录不存在时也返回 True，因为 DB 已清理）
+    if p.exists():
+        shutil.rmtree(p)
+        log.info("Deleted strategy directory: %s", p)
+        return True
+
+    # 目录不存在但 DB 有孤儿数据 → 已清理，视为成功
+    if cancelled_alerts > 0 or removed_jobs > 0:
+        log.warning("Strategy %s directory missing, but cleaned up %d alerts / %d jobs", sid, cancelled_alerts, removed_jobs)
+        return True
+
+    return False
 
 
 def _rebuild_claude_md(sid: str, user_message: str = ""):
