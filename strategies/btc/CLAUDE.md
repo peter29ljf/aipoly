@@ -62,36 +62,11 @@
 ]
 ```
 
-## 最近对话记录
-[run_done] 
-[user] 查what-price-will-bitcoin-hit-in-may-2026 70000 no 这个token
+## 记忆摘要（AI 压缩历史）
+[run_error] 
+[user] 卖出what-price-will-bitcoin-hit-in-may-2026 70000 一半仓位
 [run_started] 
-[text] 找到了。`↓ 70,000 (No)` 的 token 信息如下：
-
-| 字段 | 值 |
-|------|-----|
-| **Token ID** | `95485861341380608519980927436620979639471363690968268890982766249775308601106` |
-| **Outcome** | No |
-| **Market Slug** | `will-bitcoin-dip-to-70k-in-may-2026-438-356-919` |
-| **Market ID** | `2132779` |
-| **事件含义** | BTC 5月内是否会跌至 70,000（No = 不会跌到） |
-
-需要查这个 token 的当前价格或挂单簿吗？
-[run_done] 
-[user] 修改策略并设置警报：当what-price-will-bitcoin-hit-in-may-2026 70000 no 这个token 价格到了0.05，买入what-price-will-bitcoin-hit-before-2027 55000 No 300usdc
-[run_started] 
-[text] 已完成：
-
-| 项目 | 详情 |
-|------|------|
-| **警报 ID** | 6 |
-| **监控 token** | `will-bitcoin-dip-to-70k-in-may-2026` 70000 No |
-| **触发条件** | 价格跌破 **0.05** |
-| **触发后动作** | 买入 `what-price-will-bitcoin-hit-before-2027` 55000 No，**300 USDC** |
-| **状态** | active |
-
-价格警报已在后端激活，当该 token 价格 ≤ 0.05 时会自动唤起策略执行买入。
-[run_done] 
+[run_error] 
 [user] 卖出what-price-will-bitcoin-hit-in-may-2026 70000 一半仓位
 
 ## 用户当前消息

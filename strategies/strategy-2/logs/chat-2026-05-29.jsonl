@@ -3,3 +3,11 @@
 {"kind": "run_done", "exit_code": 0, "ts": "2026-05-29T00:04:31.137400+00:00"}
 {"kind": "run_started", "trigger": "schedule", "extra": {}, "ts": "2026-05-29T12:00:00.020250+00:00"}
 {"kind": "run_error", "error": "Separator is found, but chunk is longer than limit", "ts": "2026-05-29T12:01:07.068103+00:00"}
+{"kind": "run_started", "trigger": "manual", "extra": {}, "ts": "2026-05-29T13:32:14.114542+00:00"}
+{"kind": "text", "content": "策略文档已更新。以下是本次检查总结：\n\n---\n\n**本次检查结论（2026-05-29 第三次）**\n\n**持仓状态良好：**\n- 4 笔活跃仓位，总估值 $200.53，微盈 +$0.53\n- Elon Musk tweets (No) 明天到期，当前 97.9%，预期盈利 +$2.08，**持有不动**\n\n**今日买入：0 笔**\n- 扫描 4 个候选，全是已持仓的重复/互补标的，无新机会\n\n**⚠️ 关键问题 — USDC Allowance = 0.0**\n\n当前授权额度为零，即使下次扫描找到新标的，定时任务也**无法执行买入**。需要您：\n1. 登录 Polymarket 网页\n2. 重新授权 USDC（Approve USDC）\n3. 否则后续 12h 定时任务会因授权不足失败\n\n**下次自动执行：** UTC 00:00（北京时间 08:00 05-30）", "ts": "2026-05-29T13:33:34.083382+00:00"}
+{"kind": "run_done", "exit_code": 0, "ts": "2026-05-29T13:33:34.432093+00:00"}
+{"kind": "run_started", "trigger": "manual", "extra": {}, "ts": "2026-05-29T13:44:03.889705+00:00"}
+{"kind": "run_error", "error": "Separator is found, but chunk is longer than limit", "ts": "2026-05-29T13:44:14.375654+00:00"}
+{"kind": "run_started", "trigger": "manual", "extra": {}, "ts": "2026-05-29T13:47:51.230139+00:00"}
+{"kind": "text", "content": "以下是本次检查完整汇总：\n\n---\n\n## 当前状态（2026-05-29 第五次）\n\n**余额：$713.91**（↑ +$100.49，历史仓位已结算到账）\n**⚠️ Allowance 仍为 0.0 — 无法执行新买入**\n\n### Strategy-2 持仓（4笔，$200 总成本）\n\n| 标的 | 方向 | 当前价 | 浮盈亏 | 到期 |\n|------|------|--------|--------|------|\n| Elon Musk tweets No | No | 0.9815 | +$1.12 | **⚠️ 明天 05-30** |\n| Paloma Valencia 2nd No | No | 0.9705 | -$0.43 | 05-31 |\n| Park Chan-dae Yes | Yes | 0.9535 | +$0.24 | 06-03 |\n| Josh Turek Yes | Yes | 0.935 | -$0.27 | 06-02 |\n\n### 今日到期（05-29）\n- **Milan 28°C No**：0.9885，预期结算 +$1.18\n- **WTI Crude $65 No**：0.9795，预期结算 +$0.10\n\n### 扫描结果\n4 个候选全部重复/互补仓，**今日买入 0 笔**。\n\n### 关键行动项\n1. **明天（05-30）Elon Musk tweets 到期**，98.15%，持有至结算，预期 +$2.08\n2. ⚠️ **USDC allowance = 0**：请登录 Polymarket 网页 → 重新授权 USDC，否则后续定时任务无法买入\n3. 下次自动检查：UTC 12:00（北京时间 20:00）", "ts": "2026-05-29T13:49:57.701937+00:00"}
+{"kind": "run_done", "exit_code": 0, "ts": "2026-05-29T13:49:58.082692+00:00"}

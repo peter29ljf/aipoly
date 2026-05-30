@@ -152,19 +152,24 @@ def delete_strategy(sid: str) -> bool:
 
 def _rebuild_claude_md(sid: str, user_message: str = ""):
     from backend import strategy_doc_io, portfolio_io, chat_log, alerts_db
+    from backend.memory_compressor import read_memory
     doc = strategy_doc_io.read(sid)
     positions = portfolio_io.list_positions(sid)
-    recent = chat_log.read_recent(sid, 5)  # 减至 5 避免 prompt 太长
     active_alerts = alerts_db.get_active_alerts(sid)
 
     pos_str = json.dumps(positions, ensure_ascii=False, indent=2) if positions else "（无持仓）"
     alerts_str = json.dumps(active_alerts, ensure_ascii=False, indent=2) if active_alerts else "（无活跃警报）"
 
-    # 截断过长的消息（超过 500 字符）
-    history_str = "\n".join(
-        f"[{e.get('kind','?')}] {(e.get('content', e.get('text', ''))[:500] + '…' if len(str(e.get('content', e.get('text', '')))) > 500 else e.get('content', e.get('text', '')))}"
-        for e in recent
-    ) if recent else "（无历史）"
+    # 优先使用 AI 压缩记忆，fallback 到最近 5 条原始记录
+    compressed = read_memory(sid)
+    if compressed:
+        history_str = compressed
+    else:
+        recent = chat_log.read_recent(sid, 5)
+        history_str = "\n".join(
+            f"[{e.get('kind','?')}] {str(e.get('content', e.get('text', '')))[:400]}"
+            for e in recent
+        ) if recent else "（无历史）"
 
     user_msg_section = f"\n## 用户当前消息\n{user_message}\n" if user_message else ""
 
@@ -186,7 +191,7 @@ def _rebuild_claude_md(sid: str, user_message: str = ""):
 {alerts_str}
 ```
 
-## 最近对话记录
+## 记忆摘要（AI 压缩历史）
 {history_str}
 {user_msg_section}
 ---

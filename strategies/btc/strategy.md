@@ -31,3 +31,12 @@
 ## 最近对话记录
 [user] 修改策略并设置警报：当what-price-will-bitcoin-hit-in-may-2026 70000 no 这个token 价格到了0.05，买入what-price-will-bitcoin-hit-before-2027 55000 No 300usdc
 [ai] 已设置价格警报（ID: 6）：监控 will-bitcoin-dip-to-70k No token，价格跌至 0.05 时触发，执行买入 what-price-will-bitcoin-hit-before-2027 55000 No 300 USDC
+
+
+## 2026-05-29 操作记录
+
+- **卖出** will-bitcoin-dip-to-70k-in-may-2026 No 一半仓位
+- 卖出数量：112.58 份（原持仓 225.16 份）
+- 成交均价：0.899 USDC/份
+- 订单 ID：0xe1be5796b898332780d9d03245f76493563ac5de6594f1be02ca46d63c59e639
+- 剩余持仓：~112.58 份（成本约 100 USDC）

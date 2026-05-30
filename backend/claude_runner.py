@@ -104,6 +104,7 @@ async def _run(sid: str, trigger: str, extra: dict):
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
                 cwd=str(sid_dir),
+                limit=10 * 1024 * 1024,  # 10MB — 防止长 JSON 行触发 LimitOverrunError
             )
 
             async def read_stdout():
@@ -135,6 +136,10 @@ async def _run(sid: str, trigger: str, extra: dict):
             done = {"kind": "run_done", "exit_code": proc.returncode, "ts": datetime.now(timezone.utc).isoformat()}
             await event_bus.publish(sid, done)
             chat_log.append(sid, done)
+
+            # 异步压缩记忆（不阻塞主流程）
+            from backend.memory_compressor import compress_memory
+            asyncio.create_task(compress_memory(sid))
 
         except Exception as e:
             err = {"kind": "run_error", "error": str(e), "ts": datetime.now(timezone.utc).isoformat()}
