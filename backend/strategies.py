@@ -104,7 +104,7 @@ def create_strategy(name: str, description: str = "") -> dict:
         json.dump(meta, f, ensure_ascii=False, indent=2)
 
     save_portfolio(sid, {"positions": []})
-    write_doc(sid, f"# {name}\n\n{description}\n\n- 目标：[由 AI 填写]\n- 扫描参数：days=7, min_p=0.90, max_p=0.97\n- 单笔金额：$50 USDC\n- 每日目标：最多 5 笔新仓\n")
+    write_doc(sid, f"# {name}\n\n{description}\n\n- 目标：[由 AI 填写]\n- 扫描参数：days=30, min_p=0.90, max_p=0.97（7天内候选极少，推荐30天窗口）\n- 排除类别：体育博彩、加密货币价格预测\n- 优先类别：politics（选举初选）、geopolitics（地缘政治）、macro（美联储/经济）\n- 单笔金额：$50 USDC\n- 每日目标：最多 5 笔新仓\n- 注意：避免买 days_left=0 的市场（当天到期，流动性差，难以成交）\n")
 
     mcp_cfg = json.loads(
         json.dumps(MCP_TEMPLATE)
@@ -303,7 +303,7 @@ def _rebuild_claude_md(sid: str, user_message: str = ""):
 - `poly_trade`：market_buy / market_sell / get_midpoint / get_orderbook / get_token_ids / get_balance / get_positions / subscribe_price_alert / list_price_alerts / cancel_price_alert
 - `portfolio`：list_positions / add_position / update_position / remove_position
 - `scheduler`：schedule_task / schedule_once / list_tasks / cancel_task
-- `sweep`：scan_markets（市场初筛）
+- `sweep`：scan_markets(days=30, min_p=0.90, max_p=0.97, limit=50, categories="all") — 扫描全量预测市场（非体育/非加密），/events API，30天窗口有500+候选；list_event_categories(days=30) — 查看可用类别分布
 - `strategy_doc`：read_strategy_doc / write_strategy_doc / append_strategy_doc
 """
     path = STRATEGIES_DIR / sid / "CLAUDE.md"
