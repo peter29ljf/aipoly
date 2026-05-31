@@ -4,6 +4,7 @@ import { getStrategy, listSchedules, type ScheduleJob } from '../api'
 import ChatPanel from '../components/ChatPanel'
 import PortfolioSidebar from '../components/PortfolioSidebar'
 import StrategyDocSidebar from '../components/StrategyDocSidebar'
+import { useAuth } from '../AuthContext'
 
 function Logo() {
   return (
@@ -18,6 +19,7 @@ function Logo() {
 export default function StrategyPage() {
   const { sid } = useParams<{ sid: string }>()
   const navigate = useNavigate()
+  const { isGuest, auth, logout } = useAuth()
   const [schedules, setSchedules] = useState<ScheduleJob[]>([])
   const [strategyName, setStrategyName] = useState('')
 
@@ -72,8 +74,26 @@ export default function StrategyPage() {
           )}
         </div>
 
-        <div style={{ fontSize: 11, color: 'var(--t3)', letterSpacing: 0.3 }}>
-          Polymarket AI
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          {isGuest && (
+            <span style={{
+              fontSize: 10, fontWeight: 600, letterSpacing: 0.6,
+              color: 'var(--t3)', background: 'var(--bg)',
+              border: '1px solid var(--border)', borderRadius: 5,
+              padding: '2px 7px', textTransform: 'uppercase',
+            }}>访客</span>
+          )}
+          <span style={{ fontSize: 11, color: 'var(--t3)' }}>{auth?.username}</span>
+          <button
+            onClick={logout}
+            style={{
+              background: 'none', border: '1px solid var(--border)', borderRadius: 6,
+              color: 'var(--t3)', fontSize: 11, padding: '3px 9px',
+              cursor: 'pointer', fontFamily: 'var(--font)', transition: 'all 0.15s',
+            }}
+            onMouseEnter={e => { e.currentTarget.style.color = 'var(--t1)'; e.currentTarget.style.borderColor = 'var(--border-2)' }}
+            onMouseLeave={e => { e.currentTarget.style.color = 'var(--t3)'; e.currentTarget.style.borderColor = 'var(--border)' }}
+          >退出</button>
         </div>
       </div>
 
@@ -87,7 +107,7 @@ export default function StrategyPage() {
           <PortfolioSidebar sid={sid} />
         </div>
         <div style={{ overflow: 'hidden', borderLeft: '1px solid var(--border)' }}>
-          <ChatPanel sid={sid} />
+          <ChatPanel sid={sid} readonly={isGuest} />
         </div>
         <div style={{ overflow: 'hidden' }}>
           <StrategyDocSidebar sid={sid} />

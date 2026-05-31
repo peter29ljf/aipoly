@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { getChatHistory, runStrategy, sendMessage, subscribeStream } from '../api'
 
-interface Props { sid: string }
+interface Props { sid: string; readonly?: boolean }
 interface ChatEvent {
   kind?: string; text?: string; content?: string
   trigger?: string; ts?: string; error?: string
@@ -157,7 +157,7 @@ function isStillRunning(history: ChatEvent[]): boolean {
   return false
 }
 
-export default function ChatPanel({ sid }: Props) {
+export default function ChatPanel({ sid, readonly = false }: Props) {
   const [events, setEvents] = useState<ChatEvent[]>([])
   const [running, setRunning] = useState(false)
   const [input, setInput] = useState('')
@@ -238,14 +238,26 @@ export default function ChatPanel({ sid }: Props) {
             </div>
           </div>
         </div>
-        <button
-          className="btn-secondary"
-          onClick={handleRun}
-          disabled={running}
-          style={{ fontSize: 12, padding: '5px 12px' }}
-        >
-          {running ? '运行中…' : '▶ 手动运行'}
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {readonly && (
+            <span style={{
+              fontSize: 10, fontWeight: 600, letterSpacing: 0.5,
+              color: 'var(--t3)', background: 'var(--bg)',
+              border: '1px solid var(--border)', borderRadius: 5,
+              padding: '2px 7px', textTransform: 'uppercase',
+            }}>只读</span>
+          )}
+          {!readonly && (
+            <button
+              className="btn-secondary"
+              onClick={handleRun}
+              disabled={running}
+              style={{ fontSize: 12, padding: '5px 12px' }}
+            >
+              {running ? '运行中…' : '▶ 手动运行'}
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Messages */}
@@ -290,52 +302,63 @@ export default function ChatPanel({ sid }: Props) {
       </div>
 
       {/* Input area */}
-      <div style={{
-        borderTop: '1px solid var(--border)', padding: '12px 16px',
-        flexShrink: 0, background: 'var(--surface)',
-      }}>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
-          <textarea
-            ref={inputRef}
-            value={input}
-            onChange={e => setInput(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend() } }}
-            disabled={running}
-            placeholder="输入消息… (Enter 发送，Shift+Enter 换行)"
-            rows={1}
-            style={{
-              flex: 1, resize: 'none', maxHeight: 120, overflowY: 'auto',
-              lineHeight: 1.55, background: 'var(--bg)',
-              border: '1px solid var(--border-2)', borderRadius: 10,
-              color: 'var(--t1)', fontSize: 13, padding: '9px 13px',
-              fontFamily: 'var(--font)', outline: 'none', transition: 'border-color 0.15s',
-            }}
-            onFocus={e => { e.currentTarget.style.borderColor = 'var(--accent)' }}
-            onBlur={e => { e.currentTarget.style.borderColor = 'var(--border-2)' }}
-            onInput={e => {
-              const t = e.currentTarget
-              t.style.height = 'auto'
-              t.style.height = Math.min(t.scrollHeight, 120) + 'px'
-            }}
-          />
-          <button
-            onClick={handleSend}
-            disabled={!canSend}
-            style={{
-              flexShrink: 0,
-              background: canSend ? 'var(--accent)' : 'var(--surface-2)',
-              border: 'none', borderRadius: 10,
-              color: canSend ? 'white' : 'var(--t3)',
-              padding: '9px 16px', fontSize: 13, fontWeight: 500,
-              transition: 'all 0.15s', cursor: canSend ? 'pointer' : 'default',
-              fontFamily: 'var(--font)',
-            }}
-          >发送</button>
+      {readonly ? (
+        <div style={{
+          borderTop: '1px solid var(--border)', padding: '14px 16px',
+          flexShrink: 0, background: 'var(--surface)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+        }}>
+          <span style={{ fontSize: 18, opacity: 0.3 }}>🔒</span>
+          <span style={{ fontSize: 12, color: 'var(--t3)' }}>访客模式 — 仅可查看，无法发送消息</span>
         </div>
-        <div style={{ fontSize: 10, color: 'var(--t3)', marginTop: 6, textAlign: 'right' }}>
-          Enter 发送 · Shift+Enter 换行
+      ) : (
+        <div style={{
+          borderTop: '1px solid var(--border)', padding: '12px 16px',
+          flexShrink: 0, background: 'var(--surface)',
+        }}>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+            <textarea
+              ref={inputRef}
+              value={input}
+              onChange={e => setInput(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend() } }}
+              disabled={running}
+              placeholder="输入消息… (Enter 发送，Shift+Enter 换行)"
+              rows={1}
+              style={{
+                flex: 1, resize: 'none', maxHeight: 120, overflowY: 'auto',
+                lineHeight: 1.55, background: 'var(--bg)',
+                border: '1px solid var(--border-2)', borderRadius: 10,
+                color: 'var(--t1)', fontSize: 13, padding: '9px 13px',
+                fontFamily: 'var(--font)', outline: 'none', transition: 'border-color 0.15s',
+              }}
+              onFocus={e => { e.currentTarget.style.borderColor = 'var(--accent)' }}
+              onBlur={e => { e.currentTarget.style.borderColor = 'var(--border-2)' }}
+              onInput={e => {
+                const t = e.currentTarget
+                t.style.height = 'auto'
+                t.style.height = Math.min(t.scrollHeight, 120) + 'px'
+              }}
+            />
+            <button
+              onClick={handleSend}
+              disabled={!canSend}
+              style={{
+                flexShrink: 0,
+                background: canSend ? 'var(--accent)' : 'var(--surface-2)',
+                border: 'none', borderRadius: 10,
+                color: canSend ? 'white' : 'var(--t3)',
+                padding: '9px 16px', fontSize: 13, fontWeight: 500,
+                transition: 'all 0.15s', cursor: canSend ? 'pointer' : 'default',
+                fontFamily: 'var(--font)',
+              }}
+            >发送</button>
+          </div>
+          <div style={{ fontSize: 10, color: 'var(--t3)', marginTop: 6, textAlign: 'right' }}>
+            Enter 发送 · Shift+Enter 换行
+          </div>
         </div>
-      </div>
+      )}
     </div>
   )
 }

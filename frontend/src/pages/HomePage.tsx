@@ -5,6 +5,7 @@ import {
   sendMessage, subscribeStream, getChatHistory, getMcpHealth,
   type Strategy, type McpServerStatus,
 } from '../api'
+import { useAuth } from '../AuthContext'
 
 const AGENT_SID = '_agent'
 
@@ -118,7 +119,7 @@ function ClaudeAvatar({ size = 28 }: { size?: number }) {
   )
 }
 
-function AgentChat() {
+function AgentChat({ readonly = false }: { readonly?: boolean }) {
   const [events, setEvents] = useState<any[]>([])
   const [input, setInput] = useState('')
   const [running, setRunning] = useState(false)
@@ -292,49 +293,61 @@ function AgentChat() {
       </div>
 
       {/* Input */}
-      <div style={{
-        borderTop: '1px solid var(--border)', padding: '10px 14px',
-        flexShrink: 0, background: 'var(--surface)',
-        borderRadius: '0 0 var(--r) var(--r)',
-      }}>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
-          <textarea
-            ref={inputRef}
-            value={input}
-            onChange={e => setInput(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend() } }}
-            disabled={running}
-            placeholder="询问市场分析、价格查询、策略建议…"
-            rows={1}
-            style={{
-              flex: 1, resize: 'none', maxHeight: 100, overflowY: 'auto',
-              lineHeight: 1.55, background: 'var(--bg)',
-              border: '1px solid var(--border-2)', borderRadius: 10,
-              color: 'var(--t1)', fontSize: 13, padding: '8px 12px',
-              fontFamily: 'var(--font)', outline: 'none', transition: 'border-color 0.15s',
-            }}
-            onFocus={e => { e.currentTarget.style.borderColor = 'var(--accent)' }}
-            onBlur={e => { e.currentTarget.style.borderColor = 'var(--border-2)' }}
-            onInput={e => {
-              const t = e.currentTarget; t.style.height = 'auto'
-              t.style.height = Math.min(t.scrollHeight, 100) + 'px'
-            }}
-          />
-          <button
-            onClick={handleSend}
-            disabled={!canSend}
-            style={{
-              flexShrink: 0,
-              background: canSend ? 'var(--accent)' : 'var(--surface-2)',
-              border: 'none', borderRadius: 10,
-              color: canSend ? 'white' : 'var(--t3)',
-              padding: '8px 14px', fontSize: 13, fontWeight: 500,
-              transition: 'all 0.15s', cursor: canSend ? 'pointer' : 'default',
-              fontFamily: 'var(--font)',
-            }}
-          >发送</button>
+      {readonly ? (
+        <div style={{
+          borderTop: '1px solid var(--border)', padding: '13px 16px',
+          flexShrink: 0, background: 'var(--surface)',
+          borderRadius: '0 0 var(--r) var(--r)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+        }}>
+          <span style={{ fontSize: 16, opacity: 0.3 }}>🔒</span>
+          <span style={{ fontSize: 12, color: 'var(--t3)' }}>访客模式 — 仅可查看</span>
         </div>
-      </div>
+      ) : (
+        <div style={{
+          borderTop: '1px solid var(--border)', padding: '10px 14px',
+          flexShrink: 0, background: 'var(--surface)',
+          borderRadius: '0 0 var(--r) var(--r)',
+        }}>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+            <textarea
+              ref={inputRef}
+              value={input}
+              onChange={e => setInput(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend() } }}
+              disabled={running}
+              placeholder="询问市场分析、价格查询、策略建议…"
+              rows={1}
+              style={{
+                flex: 1, resize: 'none', maxHeight: 100, overflowY: 'auto',
+                lineHeight: 1.55, background: 'var(--bg)',
+                border: '1px solid var(--border-2)', borderRadius: 10,
+                color: 'var(--t1)', fontSize: 13, padding: '8px 12px',
+                fontFamily: 'var(--font)', outline: 'none', transition: 'border-color 0.15s',
+              }}
+              onFocus={e => { e.currentTarget.style.borderColor = 'var(--accent)' }}
+              onBlur={e => { e.currentTarget.style.borderColor = 'var(--border-2)' }}
+              onInput={e => {
+                const t = e.currentTarget; t.style.height = 'auto'
+                t.style.height = Math.min(t.scrollHeight, 100) + 'px'
+              }}
+            />
+            <button
+              onClick={handleSend}
+              disabled={!canSend}
+              style={{
+                flexShrink: 0,
+                background: canSend ? 'var(--accent)' : 'var(--surface-2)',
+                border: 'none', borderRadius: 10,
+                color: canSend ? 'white' : 'var(--t3)',
+                padding: '8px 14px', fontSize: 13, fontWeight: 500,
+                transition: 'all 0.15s', cursor: canSend ? 'pointer' : 'default',
+                fontFamily: 'var(--font)',
+              }}
+            >发送</button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -466,6 +479,7 @@ export default function HomePage() {
   const [tab, setTab] = useState<'agent' | 'strategies'>('agent')
   const [cleanupTarget, setCleanupTarget] = useState<{ sid: string; name: string } | null>(null)
   const navigate = useNavigate()
+  const { isGuest, auth, logout } = useAuth()
 
   const load = () => listStrategies().then(s => setStrategies(s.filter(x => x.id !== AGENT_SID)))
   useEffect(() => { load() }, [])
@@ -526,11 +540,32 @@ export default function HomePage() {
             Polymarket · Claude AI 自动交易系统
           </p>
         </div>
-        {tab === 'strategies' && (
-          <button className="btn-primary" onClick={() => setShowCreate(true)}>
-            + 新建策略
-          </button>
-        )}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          {tab === 'strategies' && !isGuest && (
+            <button className="btn-primary" onClick={() => setShowCreate(true)}>
+              + 新建策略
+            </button>
+          )}
+          {isGuest && (
+            <span style={{
+              fontSize: 10, fontWeight: 600, letterSpacing: 0.6,
+              color: 'var(--t3)', background: 'var(--surface)',
+              border: '1px solid var(--border)', borderRadius: 5,
+              padding: '3px 8px', textTransform: 'uppercase',
+            }}>访客</span>
+          )}
+          <span style={{ fontSize: 11, color: 'var(--t3)' }}>{auth?.username}</span>
+          <button
+            onClick={logout}
+            style={{
+              background: 'none', border: '1px solid var(--border)', borderRadius: 6,
+              color: 'var(--t3)', fontSize: 11, padding: '4px 10px',
+              cursor: 'pointer', fontFamily: 'var(--font)', transition: 'all 0.15s',
+            }}
+            onMouseEnter={e => { e.currentTarget.style.color = 'var(--t1)'; e.currentTarget.style.borderColor = 'var(--border-2)' }}
+            onMouseLeave={e => { e.currentTarget.style.color = 'var(--t3)'; e.currentTarget.style.borderColor = 'var(--border)' }}
+          >退出</button>
+        </div>
       </div>
 
       {/* Tabs */}
@@ -547,7 +582,7 @@ export default function HomePage() {
       <McpStatusBar />
 
       {/* ── Agent tab ── */}
-      {tab === 'agent' && <AgentChat />}
+      {tab === 'agent' && <AgentChat readonly={isGuest} />}
 
       {/* ── Strategies tab ── */}
       {tab === 'strategies' && (
@@ -648,11 +683,13 @@ export default function HomePage() {
                     </div>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
-                    <button
-                      className="btn-danger"
-                      style={{ fontSize: 11 }}
-                      onClick={e => handleDelete(s.id, s.name, e)}
-                    >删除</button>
+                    {!isGuest && (
+                      <button
+                        className="btn-danger"
+                        style={{ fontSize: 11 }}
+                        onClick={e => handleDelete(s.id, s.name, e)}
+                      >删除</button>
+                    )}
                     <span style={{ color: 'var(--t3)', fontSize: 16 }}>›</span>
                   </div>
                 </div>
