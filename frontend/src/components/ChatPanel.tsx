@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { getChatHistory, runStrategy, sendMessage, subscribeStream } from '../api'
+import { getChatHistory, runStrategy, sendMessage, subscribeStream, clearChatHistory } from '../api'
 
 interface Props { sid: string; readonly?: boolean }
 interface ChatEvent {
@@ -174,6 +174,7 @@ export default function ChatPanel({ sid, readonly = false }: Props) {
   useEffect(() => {
     getChatHistory(sid).then(h => { setEvents(h); setRunning(isStillRunning(h)) })
     const es = subscribeStream(sid, (e) => {
+      if (e.kind === 'history_cleared') { setEvents([]); return }
       setEvents(prev => [...prev, e])
       if (e.kind === 'run_started') setRunningWithTimeout(true)
       if (e.kind === 'run_done' || e.kind === 'run_error') setRunningWithTimeout(false)
@@ -193,6 +194,12 @@ export default function ChatPanel({ sid, readonly = false }: Props) {
     setRunningWithTimeout(true)
     const r = await runStrategy(sid)
     if (!r.started) setRunningWithTimeout(false)
+  }
+
+  async function handleClear() {
+    if (!confirm('清空所有聊天记录？此操作不可撤销。')) return
+    await clearChatHistory(sid)
+    setEvents([])
   }
 
   async function handleSend() {
@@ -239,23 +246,37 @@ export default function ChatPanel({ sid, readonly = false }: Props) {
           </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          {readonly && (
+          {readonly ? (
             <span style={{
               fontSize: 10, fontWeight: 600, letterSpacing: 0.5,
               color: 'var(--t3)', background: 'var(--bg)',
               border: '1px solid var(--border)', borderRadius: 5,
               padding: '2px 7px', textTransform: 'uppercase',
             }}>只读</span>
-          )}
-          {!readonly && (
-            <button
-              className="btn-secondary"
-              onClick={handleRun}
-              disabled={running}
-              style={{ fontSize: 12, padding: '5px 12px' }}
-            >
-              {running ? '运行中…' : '▶ 手动运行'}
-            </button>
+          ) : (
+            <>
+              <button
+                onClick={handleClear}
+                disabled={running}
+                title="清空所有聊天记录"
+                style={{
+                  background: 'none', border: '1px solid var(--border)',
+                  borderRadius: 7, color: 'var(--t3)', fontSize: 12,
+                  padding: '4px 9px', cursor: running ? 'default' : 'pointer',
+                  fontFamily: 'var(--font)', transition: 'all 0.15s',
+                }}
+                onMouseEnter={e => { if (!running) { e.currentTarget.style.color = 'var(--red)'; e.currentTarget.style.borderColor = 'rgba(245,90,90,0.4)' } }}
+                onMouseLeave={e => { e.currentTarget.style.color = 'var(--t3)'; e.currentTarget.style.borderColor = 'var(--border)' }}
+              >🗑 清空</button>
+              <button
+                className="btn-secondary"
+                onClick={handleRun}
+                disabled={running}
+                style={{ fontSize: 12, padding: '5px 12px' }}
+              >
+                {running ? '运行中…' : '▶ 手动运行'}
+              </button>
+            </>
           )}
         </div>
       </div>

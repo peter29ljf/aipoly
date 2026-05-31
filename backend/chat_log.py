@@ -21,6 +21,18 @@ def append(sid: str, event: dict):
         f.write(json.dumps(event, ensure_ascii=False) + "\n")
 
 
+def clear_all(sid: str) -> int:
+    """删除该策略的所有聊天日志文件，返回删除的文件数。"""
+    log_dir = STRATEGIES_DIR / sid / "logs"
+    if not log_dir.exists():
+        return 0
+    count = 0
+    for f in log_dir.glob("chat-*.jsonl"):
+        f.unlink(missing_ok=True)
+        count += 1
+    return count
+
+
 def read_recent(sid: str, n: int = 20) -> list[dict]:
     """读取最近 n 条日志（跨文件）。"""
     log_dir = STRATEGIES_DIR / sid / "logs"

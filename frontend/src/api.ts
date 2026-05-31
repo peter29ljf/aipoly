@@ -81,6 +81,11 @@ export async function sendMessage(sid: string, message: string): Promise<{ start
   return r.json()
 }
 
+export async function clearChatHistory(sid: string): Promise<{ ok: boolean }> {
+  const r = await fetch(`${BASE}/api/strategies/${sid}/chat/history`, { method: 'DELETE' })
+  return r.json()
+}
+
 export function subscribeStream(sid: string, onEvent: (e: any) => void): EventSource {
   const es = new EventSource(`${BASE}/api/strategies/${sid}/chat/stream`)
   es.onmessage = (e) => {

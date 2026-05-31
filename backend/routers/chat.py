@@ -41,6 +41,20 @@ async def send_message(sid: str, req: SendMessageRequest):
     return {"started": started}
 
 
+@router.delete("/history")
+async def clear_history(sid: str):
+    """清空该策略的全部聊天记录（删除所有 chat-*.jsonl 文件）。"""
+    if not strat.get_strategy(sid):
+        raise HTTPException(404, "Strategy not found")
+    deleted = chat_log.clear_all(sid)
+    await event_bus.publish(sid, {
+        "kind": "history_cleared",
+        "ts": datetime.now(timezone.utc).isoformat(),
+        "deleted_files": deleted,
+    })
+    return {"ok": True, "deleted_files": deleted}
+
+
 @router.get("/stream")
 async def stream(sid: str):
     if not strat.get_strategy(sid):

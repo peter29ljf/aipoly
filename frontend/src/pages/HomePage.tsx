@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   listStrategies, createStrategy, deleteStrategy,
-  sendMessage, subscribeStream, getChatHistory, getMcpHealth,
+  sendMessage, subscribeStream, getChatHistory, getMcpHealth, clearChatHistory,
   type Strategy, type McpServerStatus,
 } from '../api'
 import { useAuth } from '../AuthContext'
@@ -138,6 +138,7 @@ function AgentChat({ readonly = false }: { readonly?: boolean }) {
       setEvents(h); setRunning(isStillRunning(h))
     }).catch(() => {})
     const es = subscribeStream(AGENT_SID, (e) => {
+      if (e.kind === 'history_cleared') { setEvents([]); return }
       setEvents(prev => [...prev, e])
       if (e.kind === 'run_started') setRunningWithTimeout(true)
       if (e.kind === 'run_done' || e.kind === 'run_error') setRunningWithTimeout(false)
@@ -161,6 +162,12 @@ function AgentChat({ readonly = false }: { readonly?: boolean }) {
     setRunningWithTimeout(true)
     const r = await sendMessage(AGENT_SID, msg).catch(() => ({ started: false }))
     if (!r.started) setRunningWithTimeout(false)
+  }
+
+  async function handleClear() {
+    if (!confirm('清空全局助手的所有聊天记录？此操作不可撤销。')) return
+    await clearChatHistory(AGENT_SID)
+    setEvents([])
   }
 
   function renderEvent(e: any, i: number) {
@@ -243,18 +250,32 @@ function AgentChat({ readonly = false }: { readonly?: boolean }) {
           <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--t1)' }}>全局助手</div>
           <div style={{ fontSize: 11, color: 'var(--t3)' }}>扫市场 · 查价格 · 问策略</div>
         </div>
-        {running && (
-          <span style={{
-            marginLeft: 'auto', fontSize: 11, color: 'var(--accent)',
-            display: 'flex', alignItems: 'center', gap: 5,
-          }}>
-            <span style={{
-              width: 6, height: 6, borderRadius: '50%', background: 'var(--accent)',
-              display: 'inline-block', animation: 'pulse-ring 1s ease-out infinite',
-            }} />
-            正在运行…
-          </span>
-        )}
+        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
+          {running && (
+            <span style={{ fontSize: 11, color: 'var(--accent)', display: 'flex', alignItems: 'center', gap: 5 }}>
+              <span style={{
+                width: 6, height: 6, borderRadius: '50%', background: 'var(--accent)',
+                display: 'inline-block', animation: 'pulse-ring 1s ease-out infinite',
+              }} />
+              正在运行…
+            </span>
+          )}
+          {!readonly && (
+            <button
+              onClick={handleClear}
+              disabled={running}
+              title="清空所有聊天记录"
+              style={{
+                background: 'none', border: '1px solid var(--border)',
+                borderRadius: 7, color: 'var(--t3)', fontSize: 12,
+                padding: '4px 9px', cursor: running ? 'default' : 'pointer',
+                fontFamily: 'var(--font)', transition: 'all 0.15s',
+              }}
+              onMouseEnter={e => { if (!running) { e.currentTarget.style.color = 'var(--red)'; e.currentTarget.style.borderColor = 'rgba(245,90,90,0.4)' } }}
+              onMouseLeave={e => { e.currentTarget.style.color = 'var(--t3)'; e.currentTarget.style.borderColor = 'var(--border)' }}
+            >🗑 清空</button>
+          )}
+        </div>
       </div>
 
       {/* Messages */}
