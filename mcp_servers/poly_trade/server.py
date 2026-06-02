@@ -23,10 +23,35 @@ from backend.trader import market_buy as _buy, market_sell as _sell
 
 mcp = FastMCP("poly_trade")
 
+# ── 模拟交易模式 ──────────────────────────────────────────────────────────────
+# 环境变量 AIPM_TRADE_MODE=live 才执行真实交易，默认 sim（模拟）
+_TRADE_MODE = os.environ.get("AIPM_TRADE_MODE", "sim").strip().lower()
+_IS_SIM = (_TRADE_MODE != "live")
+
+if _IS_SIM:
+    import logging
+    logging.getLogger(__name__).warning(
+        "⚠️  poly_trade 运行在【模拟交易模式】，market_buy/market_sell 不执行真实交易。"
+        " 设置环境变量 AIPM_TRADE_MODE=live 启用真实交易。"
+    )
+
 
 @mcp.tool()
 def market_buy(token_id: str, amount_usdc: float) -> str:
-    """市价买入。token_id 为 outcome token ID，amount_usdc 为 USDC 金额。应用滑点保护。"""
+    """市价买入。token_id 为 outcome token ID，amount_usdc 为 USDC 金额。应用滑点保护。
+    ⚠️ 模拟模式下不执行真实交易，返回模拟结果（AIPM_TRADE_MODE=live 才真实买入）。"""
+    if _IS_SIM:
+        mid = _get_mid(token_id)
+        sim_shares = round(amount_usdc / mid, 4) if mid and mid > 0 else 0
+        return json.dumps({
+            "mode": "SIMULATION",
+            "status": "simulated_success",
+            "token_id": token_id,
+            "amount_usdc": amount_usdc,
+            "price": mid,
+            "shares_received": sim_shares,
+            "note": "⚠️ 模拟交易，未执行真实链上交易。设置 AIPM_TRADE_MODE=live 启用真实交易。",
+        }, ensure_ascii=False)
     cfg = Config.from_file()
     result = _buy(token_id, amount_usdc, cfg)
     return json.dumps(result, ensure_ascii=False)
@@ -34,7 +59,20 @@ def market_buy(token_id: str, amount_usdc: float) -> str:
 
 @mcp.tool()
 def market_sell(token_id: str, shares: float) -> str:
-    """市价卖出。shares 为持仓数量（非 USDC）。会先验证持仓，不足则只卖持有部分。"""
+    """市价卖出。shares 为持仓数量（非 USDC）。
+    ⚠️ 模拟模式下不执行真实交易，返回模拟结果（AIPM_TRADE_MODE=live 才真实卖出）。"""
+    if _IS_SIM:
+        mid = _get_mid(token_id)
+        sim_usdc = round(shares * mid, 4) if mid and mid > 0 else 0
+        return json.dumps({
+            "mode": "SIMULATION",
+            "status": "simulated_success",
+            "token_id": token_id,
+            "shares": shares,
+            "price": mid,
+            "usdc_received": sim_usdc,
+            "note": "⚠️ 模拟交易，未执行真实链上交易。设置 AIPM_TRADE_MODE=live 启用真实交易。",
+        }, ensure_ascii=False)
     cfg = Config.from_file()
     result = _sell(token_id, shares, cfg)
     return json.dumps(result, ensure_ascii=False)
