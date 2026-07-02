@@ -83,8 +83,13 @@ def list_jobs(sid: str | None = None) -> list[dict]:
     sch = get_scheduler()
     jobs = []
     for job in sch.get_jobs():
-        if sid and not job.id.startswith(sid):
-            continue
+        if sid:
+            # 匹配 sid 前缀（兼容 "sid-xxx" 和 "sid_xxx" 两种格式）
+            # 同时匹配 job.kwargs/args 里存储的 sid
+            job_args = job.args or []
+            job_sid = job_args[0] if job_args else ""
+            if job_sid != sid and not job.id.startswith(sid + "-") and not job.id.startswith(sid + "_"):
+                continue
         next_run = job.next_run_time.isoformat() if job.next_run_time else None
         jobs.append({"id": job.id, "next_run": next_run, "trigger": str(job.trigger)})
     return jobs

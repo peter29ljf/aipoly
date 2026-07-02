@@ -35,3 +35,16 @@ Thumbs.db
 
 # Poetry
 poetry.lock
+
+# Data files
+data/scheduler.db
+data/alerts.db
+data/trades.json
+
+# Logs & strategy state
+strategies/*/logs/
+strategies/*/memory.md
+strategies/*/_meta.json
+strategies/*/CLAUDE.md
+strategies/*/portfolio.json
+strategies/strategy/

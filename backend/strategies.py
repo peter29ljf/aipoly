@@ -301,8 +301,10 @@ def _rebuild_claude_md(sid: str, user_message: str = ""):
 
 ## 可用 MCP 工具
 - `poly_trade`：market_buy / market_sell / get_midpoint / get_orderbook / get_token_ids / get_balance / get_positions / subscribe_price_alert / list_price_alerts / cancel_price_alert
+  ⚠️ **交易模式：LIVE（真实交易）** — market_buy/market_sell 直接执行链上真实订单，不是模拟。
 - `portfolio`：list_positions / add_position / update_position / remove_position
-- `scheduler`：schedule_task / schedule_once / list_tasks / cancel_task
+- `scheduler`：schedule_task(strategy_id, cron) / schedule_once(strategy_id, run_at) / list_tasks(strategy_id) / cancel_task(job_id)
+  ⚠️ **strategy_id 是第一个必填参数**，必须传入当前策略ID（即 `{sid}`），否则任务不会显示在UI中。
 - `sweep`：scan_markets(days=30, min_p=0.90, max_p=0.97, limit=50, categories="all") — 扫描全量预测市场（非体育/非加密），/events API，30天窗口有500+候选；list_event_categories(days=30) — 查看可用类别分布
 - `strategy_doc`：read_strategy_doc / write_strategy_doc / append_strategy_doc
 """

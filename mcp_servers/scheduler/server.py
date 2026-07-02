@@ -13,13 +13,16 @@ mcp = FastMCP("scheduler")
 
 
 def _sid(strategy_id: str) -> str:
-    return strategy_id.strip() or _env_sid()
+    resolved = strategy_id.strip() or _env_sid()
+    if not resolved:
+        raise ValueError("strategy_id 不能为空，请传入策略目录名（如 '_agent' 或 'strategy'）")
+    return resolved
 
 
 @mcp.tool()
-def schedule_task(cron: str, strategy_id: str = "", job_id: str = "") -> str:
+def schedule_task(strategy_id: str, cron: str, job_id: str = "") -> str:
     """创建 cron 定时任务，到时自动触发 Claude 运行本策略。
-    - strategy_id: 策略目录名（如 'strategy-2'），必须传入
+    - strategy_id: 策略目录名，必须传入（如 '_agent' 或 'strategy'）
     - cron: '分 时 日 月 周'（5 字段，UTC 时区）
       示例：'5 9 * * *' = 每天 UTC 09:05"""
     try:
@@ -33,9 +36,9 @@ def schedule_task(cron: str, strategy_id: str = "", job_id: str = "") -> str:
 
 
 @mcp.tool()
-def schedule_once(run_at: str, strategy_id: str = "", job_id: str = "") -> str:
+def schedule_once(strategy_id: str, run_at: str, job_id: str = "") -> str:
     """创建一次性延迟任务。
-    - strategy_id: 策略目录名，必须传入
+    - strategy_id: 策略目录名，必须传入（如 '_agent' 或 'strategy'）
     - run_at: ISO8601 UTC 时间字符串，如 '2026-06-01T09:00:00+00:00'"""
     try:
         payload: dict = {"sid": _sid(strategy_id), "run_at": run_at}
@@ -48,8 +51,8 @@ def schedule_once(run_at: str, strategy_id: str = "", job_id: str = "") -> str:
 
 
 @mcp.tool()
-def list_tasks(strategy_id: str = "") -> str:
-    """列出当前策略的所有定时任务。strategy_id 为策略目录名。"""
+def list_tasks(strategy_id: str) -> str:
+    """列出当前策略的所有定时任务。strategy_id 为策略目录名（如 '_agent' 或 'strategy'）。"""
     try:
         result = api_get(f"/_internal/schedule/{_sid(strategy_id)}")
         return json.dumps(result, ensure_ascii=False)

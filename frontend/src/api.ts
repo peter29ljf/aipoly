@@ -28,10 +28,28 @@ export interface Alert {
   fired_price?: number
 }
 
+export interface ActivityRun {
+  ts: string
+  trigger: string
+  trigger_label: string
+  user_message: string | null
+  summary: string | null
+  status: 'ok' | 'error' | 'running'
+  exit_code: number | null
+  duration_s: number | null
+}
+
 export interface ScheduleJob {
   id: string
   next_run: string | null
   trigger: string
+}
+
+export interface ScheduleConfig {
+  enabled: boolean
+  preset: string | null
+  presets: string[]
+  job: ScheduleJob | null
 }
 
 // ── Strategies ────────────────────────────────────────────────────────────────
@@ -126,6 +144,24 @@ export async function cancelAlert(sid: string, alertId: number): Promise<void> {
 export async function listSchedules(sid: string): Promise<ScheduleJob[]> {
   const r = await fetch(`${BASE}/api/strategies/${sid}/schedules`)
   return r.json()
+}
+
+export async function getActivity(sid: string, limit = 30): Promise<ActivityRun[]> {
+  const r = await fetch(`${BASE}/api/strategies/${sid}/activity?limit=${limit}`)
+  return r.json()
+}
+
+export async function getScheduleConfig(sid: string): Promise<ScheduleConfig> {
+  const r = await fetch(`${BASE}/api/strategies/${sid}/schedules/config`)
+  return r.json()
+}
+
+export async function setScheduleConfig(sid: string, enabled: boolean, preset: string): Promise<void> {
+  await fetch(`${BASE}/api/strategies/${sid}/schedules/config`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ enabled, preset }),
+  })
 }
 
 // ── Strategy Doc ──────────────────────────────────────────────────────────────

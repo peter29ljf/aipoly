@@ -13,7 +13,7 @@ from fastapi.staticfiles import StaticFiles
 
 from backend import alerts_db, scheduler as sched
 from backend.market_data import price_monitor_loop
-from backend.routers import strategies, chat, alerts, portfolio, schedules, strategy_doc, internal, health
+from backend.routers import strategies, chat, alerts, portfolio, schedules, strategy_doc, internal, health, activity
 from backend.strategies import ensure_global_agent
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
@@ -66,6 +66,7 @@ app.include_router(schedules.router)
 app.include_router(strategy_doc.router)
 app.include_router(internal.router)
 app.include_router(health.router)
+app.include_router(activity.router)
 
 
 @app.get("/health")

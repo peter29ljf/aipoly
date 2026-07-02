@@ -4,6 +4,7 @@ import asyncio
 import glob
 import json
 import logging
+import os
 import shutil
 from datetime import datetime, timezone
 from pathlib import Path
@@ -99,11 +100,14 @@ async def _run(sid: str, trigger: str, extra: dict):
         ]
 
         try:
+            env = os.environ.copy()
+            env["AIPM_TRADE_MODE"] = "live"
             proc = await asyncio.create_subprocess_exec(
                 *cmd,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
                 cwd=str(sid_dir),
+                env=env,
                 limit=10 * 1024 * 1024,  # 10MB — 防止长 JSON 行触发 LimitOverrunError
             )
 
