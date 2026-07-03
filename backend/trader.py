@@ -1,5 +1,6 @@
 """
 市价买卖 + 滑点保护（partial/cancel）+ 卖出前持仓校验。
+限价单挂单/撤单/查询。
 依赖 data/.env 与 config 中的滑点设置。
 """
 
@@ -300,5 +301,87 @@ def market_sell(
             }
         err = resp.get("errorMsg") or resp.get("error") or "下单失败"
         return {"success": False, "error": err, "avg_price": avg_price}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+def _limit_order(token_id: str, price: float, size: float, side: str) -> dict:
+    """挂限价单（GTC，一直挂到成交或撤单）。
+    side: 'BUY' 或 'SELL'。price 为 0-1 之间的限价，size 为 shares 数量。
+    返回 { "success", "order_id"?, "error"? }
+    """
+    _load_env()
+    if not (0 < price < 1):
+        return {"success": False, "error": "price 必须在 0 和 1 之间"}
+    if size <= 0:
+        return {"success": False, "error": "size 必须大于 0"}
+
+    try:
+        from py_clob_client_v2 import OrderArgs, OrderType, Side
+    except ImportError:
+        return {"success": False, "error": "未安装 py-clob-client-v2"}
+
+    side_enum = Side.BUY if side.upper() == "BUY" else Side.SELL
+
+    try:
+        client = _v2_client()
+        order_args = OrderArgs(token_id=token_id, price=float(price), size=float(size), side=side_enum)
+        resp = client.create_and_post_order(order_args=order_args, order_type=OrderType.GTC)
+    except Exception as e:
+        msg = str(e)
+        if "invalid signature" in msg or "L2 authentication" in msg:
+            try:
+                client = _v2_client()
+                order_args = OrderArgs(token_id=token_id, price=float(price), size=float(size), side=side_enum)
+                resp = client.create_and_post_order(order_args=order_args, order_type=OrderType.GTC)
+            except Exception as e2:
+                return {"success": False, "error": str(e2)}
+        else:
+            return {"success": False, "error": msg}
+
+    if resp.get("success") is True:
+        return {
+            "success": True,
+            "order_id": resp.get("orderID"),
+            "token_id": token_id,
+            "price": price,
+            "size": size,
+            "side": side.upper(),
+            "status": "open",
+        }
+    return {"success": False, "error": resp.get("errorMsg") or resp.get("error") or "挂单失败"}
+
+
+def limit_buy(token_id: str, price: float, size: float) -> dict:
+    """限价买入。price 为出价（0-1），size 为购买 shares 数量。挂单后一直有效直到成交或撤单（GTC）。"""
+    return _limit_order(token_id, price, size, "BUY")
+
+
+def limit_sell(token_id: str, price: float, size: float) -> dict:
+    """限价卖出。price 为要价（0-1），size 为卖出 shares 数量。挂单后一直有效直到成交或撤单（GTC）。"""
+    return _limit_order(token_id, price, size, "SELL")
+
+
+def list_open_orders(token_id: Optional[str] = None) -> dict:
+    """列出当前所有未成交的挂单（可选按 token_id 过滤）。"""
+    _load_env()
+    try:
+        client = _v2_client()
+        from py_clob_client_v2 import OpenOrderParams
+        params = OpenOrderParams(asset_id=token_id) if token_id else None
+        orders = client.get_open_orders(params=params)
+        return {"success": True, "orders": orders}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+def cancel_limit_order(order_id: str) -> dict:
+    """撤销指定 order_id 的挂单。"""
+    _load_env()
+    try:
+        from py_clob_client_v2 import OrderPayload
+        client = _v2_client()
+        resp = client.cancel_order(OrderPayload(orderID=order_id))
+        return {"success": True, "result": resp}
     except Exception as e:
         return {"success": False, "error": str(e)}

@@ -28,16 +28,26 @@ echo "Backend PID: $BACKEND_PID"
 # 等待后端就绪并生成 token
 sleep 4
 TOKEN=$(cat data/.token 2>/dev/null || echo "")
-export AIPM_TOKEN="$TOKEN"
-export API_BASE="http://127.0.0.1:$BACKEND_PORT"
 
-# 启动 MCP 服务器
+# 生成集中式 MCP 环境变量文件（唯一真源，含密钥，已加入 .gitignore）
+cat > data/mcp.env <<EOF
+AIPM_TOKEN=$TOKEN
+API_BASE=http://127.0.0.1:$BACKEND_PORT
+STRATEGY_ID=
+AIPM_TRADE_MODE=live
+EOF
+
+set -a
+source data/mcp.env
+set +a
+
+# 启动 MCP 服务器（env 已通过 mcp.env 导出，无需再逐行内联）
 echo "Starting MCP servers..."
-MCP_PORT=8101 AIPM_TOKEN="$TOKEN" API_BASE="$API_BASE" STRATEGY_ID="" AIPM_TRADE_MODE=live .venv/bin/python3 -m mcp_servers.poly_trade.server &
-MCP_PORT=8102 AIPM_TOKEN="$TOKEN" API_BASE="$API_BASE" STRATEGY_ID="" .venv/bin/python3 -m mcp_servers.portfolio.server &
-MCP_PORT=8103 AIPM_TOKEN="$TOKEN" API_BASE="$API_BASE" STRATEGY_ID="" .venv/bin/python3 -m mcp_servers.scheduler.server &
+MCP_PORT=8101 .venv/bin/python3 -m mcp_servers.poly_trade.server &
+MCP_PORT=8102 .venv/bin/python3 -m mcp_servers.portfolio.server &
+MCP_PORT=8103 .venv/bin/python3 -m mcp_servers.scheduler.server &
 MCP_PORT=8104 .venv/bin/python3 -m mcp_servers.sweep.server &
-MCP_PORT=8105 AIPM_TOKEN="$TOKEN" API_BASE="$API_BASE" STRATEGY_ID="" .venv/bin/python3 -m mcp_servers.strategy_doc.server &
+MCP_PORT=8105 .venv/bin/python3 -m mcp_servers.strategy_doc.server &
 
 echo ""
 echo "================================================================"

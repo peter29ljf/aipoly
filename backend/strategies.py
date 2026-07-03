@@ -294,14 +294,15 @@ def _rebuild_claude_md(sid: str, user_message: str = ""):
 | 设置价格警报 | `mcp__poly_trade__subscribe_price_alert` | ❌ 只写进 strategy.md |
 | 添加/更新/删除持仓 | `mcp__portfolio__add_position` / `update_position` / `remove_position` | ❌ 只写进 strategy.md |
 | 创建定时任务 | `mcp__scheduler__schedule_task` / `schedule_once` | ❌ 只写进 strategy.md |
-| 买卖交易 | `mcp__poly_trade__market_buy` / `market_sell` | ❌ 只写进 strategy.md |
+| 买卖交易（市价，立即成交） | `mcp__poly_trade__market_buy` / `market_sell` | ❌ 只写进 strategy.md |
+| 挂限价单（等价格到再成交） | `mcp__poly_trade__limit_buy` / `limit_sell` / `list_open_orders` / `cancel_limit_order` | ❌ 只写进 strategy.md |
 | 修改策略说明文档 | `mcp__strategy_doc__write_strategy_doc` / `append_strategy_doc` | ❌ 直接修改本地文件 |
 
 **调用任何 MCP 工具时**：传入参数 `strategy_id="{sid}"`，工具会同步到后端数据库，UI 才会显示。
 
 ## 可用 MCP 工具
-- `poly_trade`：market_buy / market_sell / get_midpoint / get_orderbook / get_token_ids / get_balance / get_positions / subscribe_price_alert / list_price_alerts / cancel_price_alert
-  ⚠️ **交易模式：LIVE（真实交易）** — market_buy/market_sell 直接执行链上真实订单，不是模拟。
+- `poly_trade`：market_buy / market_sell（市价，立即成交）/ limit_buy / limit_sell（限价，GTC 挂单直到成交或撤单）/ list_open_orders / cancel_limit_order / get_midpoint / get_orderbook / get_token_ids / get_balance / get_positions / subscribe_price_alert / list_price_alerts / cancel_price_alert
+  ⚠️ **交易模式：LIVE（真实交易）** — market_buy/market_sell/limit_buy/limit_sell 直接执行链上真实订单，不是模拟。
 - `portfolio`：list_positions / add_position / update_position / remove_position
 - `scheduler`：schedule_task(strategy_id, cron) / schedule_once(strategy_id, run_at) / list_tasks(strategy_id) / cancel_task(job_id)
   ⚠️ **strategy_id 是第一个必填参数**，必须传入当前策略ID（即 `{sid}`），否则任务不会显示在UI中。

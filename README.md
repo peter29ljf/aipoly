@@ -172,22 +172,31 @@ cd frontend && nohup npm run dev -- --host 0.0.0.0 > /tmp/vite.log 2>&1 &
 
 ### 13. 启用真实交易模式
 
-系统默认为**模拟模式**（不执行真实链上交易）。启用真实交易：
+`start.sh` 会自动生成 `data/mcp.env`（唯一环境变量真源，包含 `AIPM_TRADE_MODE=live`），poly_trade MCP 启动时会 source 这个文件。**不需要也不应该手动编辑它**——每次 `bash start.sh` 都会重新生成。
 
-确认 `start.sh` 中 poly_trade MCP 启动命令包含 `AIPM_TRADE_MODE=live`：
+验证：
 ```bash
-MCP_PORT=8101 AIPM_TRADE_MODE=live ... .venv/bin/python3 -m mcp_servers.poly_trade.server &
-```
-
-重启后验证：
-```bash
-# 查余额，有返回值说明凭据正确 + API 连通
+# 查余额，有返回值说明凭据正确 + API 连通 + 真实交易模式已启用
 curl http://localhost:8010/api/strategies/_agent/portfolio
 ```
 
 ---
 
 ## 日常运维
+
+### ⚠️ 重启单个 MCP 服务器
+
+**永远使用 `restart_mcp.sh`，不要手动拼接 `python3 -m mcp_servers.X.server` 命令。**
+手动拼接容易漏传 `AIPM_TOKEN` 或 `AIPM_TRADE_MODE`，导致 API 调用静默返回 403，或交易静默退化为模拟模式。
+
+```bash
+cd /root/aipoly
+bash restart_mcp.sh poly_trade      # 或 portfolio / scheduler / sweep / strategy_doc
+```
+
+该脚本会自动从 `data/mcp.env` 加载完整环境变量、杀掉旧进程、重新启动，并把日志写到 `/tmp/<name>_mcp.log`。
+
+如果 `data/mcp.env` 中的 `AIPM_TOKEN` 为空或 `AIPM_TRADE_MODE` 不是 `sim`/`live`，MCP 服务器会**立即崩溃退出**并打印明确错误，而不是静默带着错误配置运行。
 
 ### 重启所有服务
 
@@ -197,7 +206,7 @@ pkill -f "uvicorn backend.main" || true
 pkill -f "mcp_servers" || true
 pkill -f "vite" || true
 
-# 启动
+# 启动（会自动重新生成 data/mcp.env）
 cd /root/aipoly
 bash start.sh &
 sleep 5

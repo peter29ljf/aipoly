@@ -7,6 +7,12 @@ API_BASE = os.environ.get("API_BASE", "http://127.0.0.1:8010")
 AIPM_TOKEN = os.environ.get("AIPM_TOKEN", "")
 STRATEGY_ID = os.environ.get("STRATEGY_ID", "")
 
+if not AIPM_TOKEN:
+    raise RuntimeError(
+        "AIPM_TOKEN not set — do not launch MCP servers directly; "
+        "use restart_mcp.sh <name> or start.sh, which source data/mcp.env"
+    )
+
 TIMEOUT = 15.0
 
 

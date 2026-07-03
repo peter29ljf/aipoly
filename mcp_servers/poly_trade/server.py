@@ -19,14 +19,24 @@ from backend.poly_config import load_app_env, Config
 load_app_env()
 
 from backend.api_client import get_midpoint as _get_mid, get_token_ids as _get_tids, get_positions as _get_pos, get_balance_via_client, get_book
-from backend.trader import market_buy as _buy, market_sell as _sell
+from backend.trader import (
+    market_buy as _buy, market_sell as _sell,
+    limit_buy as _limit_buy, limit_sell as _limit_sell,
+    list_open_orders as _list_open_orders, cancel_limit_order as _cancel_limit_order,
+)
 
 mcp = FastMCP("poly_trade")
 
-# ── 模拟交易模式 ──────────────────────────────────────────────────────────────
-# 环境变量 AIPM_TRADE_MODE=live 才执行真实交易，默认 sim（模拟）
-_TRADE_MODE = os.environ.get("AIPM_TRADE_MODE", "sim").strip().lower()
-_IS_SIM = (_TRADE_MODE != "live")
+# ── 交易模式 ──────────────────────────────────────────────────────────────
+# 必须显式设置 AIPM_TRADE_MODE=sim 或 =live，未设置/拼写错误一律拒绝启动
+# （宁可启动失败，也不能静默跑在错误的模式下）
+_TRADE_MODE = os.environ.get("AIPM_TRADE_MODE", "").strip().lower()
+if _TRADE_MODE not in ("sim", "live"):
+    raise RuntimeError(
+        f"AIPM_TRADE_MODE must be 'sim' or 'live', got {_TRADE_MODE!r}. "
+        "Use restart_mcp.sh poly_trade or start.sh, which set this via data/mcp.env."
+    )
+_IS_SIM = (_TRADE_MODE == "sim")
 
 if _IS_SIM:
     import logging
@@ -75,6 +85,66 @@ def market_sell(token_id: str, shares: float) -> str:
         }, ensure_ascii=False)
     cfg = Config.from_file()
     result = _sell(token_id, shares, cfg)
+    return json.dumps(result, ensure_ascii=False)
+
+
+@mcp.tool()
+def limit_buy(token_id: str, price: float, size: float) -> str:
+    """挂限价买单（GTC，一直挂到成交或撤单为止，不会像市价单立即成交）。
+    - token_id: outcome token ID
+    - price: 出价，0-1 之间（如 0.35 表示每股 $0.35）
+    - size: 购买 shares 数量
+    ⚠️ 模拟模式下不执行真实挂单，返回模拟结果（AIPM_TRADE_MODE=live 才真实挂单）。"""
+    if _IS_SIM:
+        return json.dumps({
+            "mode": "SIMULATION",
+            "status": "simulated_success",
+            "token_id": token_id,
+            "price": price,
+            "size": size,
+            "side": "BUY",
+            "note": "⚠️ 模拟挂单，未提交真实链上限价单。设置 AIPM_TRADE_MODE=live 启用真实交易。",
+        }, ensure_ascii=False)
+    result = _limit_buy(token_id, price, size)
+    return json.dumps(result, ensure_ascii=False)
+
+
+@mcp.tool()
+def limit_sell(token_id: str, price: float, size: float) -> str:
+    """挂限价卖单（GTC，一直挂到成交或撤单为止，不会像市价单立即成交）。
+    - token_id: outcome token ID
+    - price: 要价，0-1 之间（如 0.65 表示每股 $0.65）
+    - size: 卖出 shares 数量
+    ⚠️ 模拟模式下不执行真实挂单，返回模拟结果（AIPM_TRADE_MODE=live 才真实挂单）。"""
+    if _IS_SIM:
+        return json.dumps({
+            "mode": "SIMULATION",
+            "status": "simulated_success",
+            "token_id": token_id,
+            "price": price,
+            "size": size,
+            "side": "SELL",
+            "note": "⚠️ 模拟挂单，未提交真实链上限价单。设置 AIPM_TRADE_MODE=live 启用真实交易。",
+        }, ensure_ascii=False)
+    result = _limit_sell(token_id, price, size)
+    return json.dumps(result, ensure_ascii=False)
+
+
+@mcp.tool()
+def list_open_orders(token_id: str = "") -> str:
+    """列出当前所有未成交的限价挂单，可选按 token_id 过滤。"""
+    if _IS_SIM:
+        return json.dumps({"mode": "SIMULATION", "orders": [], "note": "模拟模式下无真实挂单"}, ensure_ascii=False)
+    result = _list_open_orders(token_id or None)
+    return json.dumps(result, ensure_ascii=False)
+
+
+@mcp.tool()
+def cancel_limit_order(order_id: str) -> str:
+    """撤销指定 order_id 的限价挂单。"""
+    if _IS_SIM:
+        return json.dumps({"mode": "SIMULATION", "status": "simulated_success", "order_id": order_id}, ensure_ascii=False)
+    result = _cancel_limit_order(order_id)
     return json.dumps(result, ensure_ascii=False)
 
 
