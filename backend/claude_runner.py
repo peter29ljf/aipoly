@@ -23,6 +23,16 @@ def _find_claude() -> str:
     p = shutil.which("claude")
     if p:
         return p
+    # Known fixed install locations (PATH may not be inherited depending on
+    # how this process was launched: nohup, pm2, cron, systemd, ...)
+    fixed_paths = [
+        os.path.expanduser("~/.local/bin/claude"),
+        "/root/.local/bin/claude",
+        "/usr/local/bin/claude",
+    ]
+    for fp in fixed_paths:
+        if os.path.isfile(fp) and os.access(fp, os.X_OK):
+            return fp
     # Cursor extension (common on this server)
     patterns = [
         "/root/.cursor-server/extensions/anthropic.claude-code-*/resources/native-binary/claude",
