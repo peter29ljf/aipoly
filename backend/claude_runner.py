@@ -98,18 +98,19 @@ async def _run(sid: str, trigger: str, extra: dict):
         prompt = extra.get("user_message") or _TRIGGER_PROMPTS.get(trigger, "请执行下一步操作。")
 
         sid_dir = STRATEGIES_DIR / sid
-        cmd = [
-            _find_claude(),
-            "-p", prompt,
-            "--output-format", "stream-json",
-            "--verbose",
-            "--mcp-config", str(sid_dir / ".mcp.json"),
-            "--allowedTools",
-            "Bash,Edit,Read,Write,mcp__poly_trade__*,mcp__portfolio__*,mcp__scheduler__*,mcp__sweep__*,mcp__strategy_doc__*",
-            "--permission-mode", "acceptEdits",
-        ]
 
         try:
+            cmd = [
+                _find_claude(),
+                "-p", prompt,
+                "--output-format", "stream-json",
+                "--verbose",
+                "--mcp-config", str(sid_dir / ".mcp.json"),
+                "--allowedTools",
+                "Bash,Edit,Read,Write,mcp__poly_trade__*,mcp__portfolio__*,mcp__scheduler__*,mcp__sweep__*,mcp__strategy_doc__*",
+                "--permission-mode", "acceptEdits",
+            ]
+
             env = os.environ.copy()
             env["AIPM_TRADE_MODE"] = "live"
             proc = await asyncio.create_subprocess_exec(
