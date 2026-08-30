@@ -2,6 +2,68 @@
 
 基于 Claude CLI 的 Polymarket 自动交易系统。AI 策略代理通过 MCP 工具执行真实链上交易，支持 Web UI 管理、定时自动运行、活动时间线追踪。
 
+## ⚠️ 安全要点（部署前必读）
+
+本项目 2026-08 发生过一次真实事故：交易钱包被第三方清空，损失约 $1,520。下面每一条都对应一个**实际存在过**的问题，部署前请逐条确认。
+
+### 1. MCP 服务绝不能监听公网
+
+`mcp_servers/*/server.py` 默认绑定 `127.0.0.1`。**不要改成 `0.0.0.0`。**
+
+这些服务**没有任何认证**，而且自带 `AIPM_TOKEN`——任何能连上端口的人，都能借它们以有效凭证调用内部 API，其中包括：
+
+- `strategy_doc.write_strategy_doc` — 改写 AI 要执行的策略文档
+- `scheduler.schedule_task` — 触发 Claude 运行该策略
+
+而 Claude 在本机以 **root** 运行、具备完整 shell 权限。也就是说，暴露这几个端口等于把一个 root shell 交给公网。
+
+远程访问请用 SSH 隧道：
+
+```bash
+ssh -L 8101:127.0.0.1:8101 -L 8102:127.0.0.1:8102 -L 8103:127.0.0.1:8103 \
+    -L 8104:127.0.0.1:8104 -L 8105:127.0.0.1:8105 root@<host>
+```
+
+### 2. 前端与后端 API 同样不能暴露公网
+
+`/api/*` **不做任何鉴权**。前端的登录框只是客户端 UI，绕过它直接请求 API 即可。`deploy/aipoly.caddy` 已将 Caddy 绑定在 `127.0.0.1:5173`，请勿改动。访问方式：
+
+```bash
+ssh -L 5173:127.0.0.1:5173 root@<host>   # 然后打开 http://localhost:5173
+```
+
+### 3. 私钥：这台主机就是热钱包主机
+
+本项目**运行时需要 `PRIVATE_KEY`**（py-clob-client 用它签名订单），无法“派生完 API 凭证就删掉”。因此持有它的主机必须按热钱包主机对待：
+
+- `chmod 600 data/.env` —— 部署后立即执行
+- `.gitignore` 已排除 `data/.env`，**绝不要提交**
+- **使用独立的交易钱包，不要用主钱包**；只放你能承受全部损失的资金
+- 定期轮换 CLOB API 凭证（`create_or_derive_api_key` 可重新生成）
+- 一旦怀疑主机被入侵：该钱包和私钥**永久作废**，换新钱包，不要再向旧地址充值（攻击者的 sweeper 会持续扫走进账）
+
+### 4. 修改默认密码
+
+`frontend/src/AuthContext.tsx` 里的账号密码是**占位值，且本仓库公开**。部署前必须修改并重新构建前端。注意它只是客户端校验，**不能当作安全边界**——真正的边界是第 2 条的 loopback 绑定。
+
+### 5. 启用防火墙
+
+```bash
+ufw allow 22/tcp && ufw allow 80/tcp && ufw allow 443/tcp && ufw --force enable
+```
+
+即使服务都绑定了 loopback 也要开——它是防止“某天起了个新服务忘了绑定”的兜底。
+
+### 6. 不要把任何真实值提交进本仓库
+
+本仓库历史中曾出现过一个 `AIPM_TOKEN`（已轮换作废）。提交前检查：
+
+```bash
+git diff --cached | grep -iE "private_key|token|secret|passphrase|password"
+```
+
+---
+
 ## 架构
 
 ```
@@ -81,6 +143,8 @@ claude
 
 ### 7. 配置 Polymarket 钱包凭据
 
+> ⚠️ **写入后立即 `chmod 600 data/.env`。** 该文件含私钥，本项目运行时需要它，无法在派生出 API 凭证后删除。请使用独立交易钱包——见上方安全要点 §3。
+
 ```bash
 mkdir -p data
 cat > data/.env << 'EOF'
@@ -137,38 +201,37 @@ curl http://localhost:8010/health
 
 ### 10. 启动前端（开发模式）
 
+> 生产部署已改为 Caddy 提供静态构建（见 `deploy/aipoly.caddy`），不再需要 vite dev server。
+
+如需本地开发：
+
 ```bash
-# 外网访问需要 --host
-nohup frontend/node_modules/.bin/vite --host 0.0.0.0 --root frontend > /tmp/vite.log 2>&1 &
+# 只监听回环——不要加 --host 0.0.0.0
+cd frontend && npm run dev
 ```
 
-或进入目录启动：
+### 11. 防火墙：不要开放业务端口
+
+**只开放 22 / 80 / 443。** 5173、8010、8101-8105 全部**不得**暴露到公网——它们没有鉴权（原因见上方安全要点）。
+
 ```bash
-cd frontend && nohup npm run dev -- --host 0.0.0.0 > /tmp/vite.log 2>&1 &
+ufw allow 22/tcp && ufw allow 80/tcp && ufw allow 443/tcp && ufw --force enable
 ```
 
-### 11. 开放防火墙端口
-
-在云服务商控制台（安全组/防火墙）开放以下入站 TCP 端口：
-
-| 端口 | 用途 |
-|------|------|
-| 5173 | 前端 Web UI |
-| 8010 | 后端 API |
+云服务商的安全组同样只放行这三个端口。
 
 ### 12. 访问与登录
 
-- **Web UI**：`http://服务器IP:5173`
-- **后端 API 文档**：`http://服务器IP:8010/docs`
+通过 SSH 隧道访问（**不要**直接用 `http://服务器IP:5173`）：
 
-默认账号：
+```bash
+ssh -L 5173:127.0.0.1:5173 root@<host>
+# 然后浏览器打开 http://localhost:5173
+```
 
-| 用户名 | 密码 | 权限 |
-|--------|------|------|
-| `admin` | `12340987` | 完整管理 |
-| `guest` | `guest` | 只读查看 |
+默认账号定义在 `frontend/src/AuthContext.tsx`。**部署前必须修改其中的用户名和密码并重新构建前端**——本仓库是公开的，默认值人人可见。
 
-> 建议在 `frontend/src/AuthContext.tsx` 中修改默认密码后重新构建前端。
+> 该登录仅为客户端校验，不构成安全边界。真正的边界是所有服务绑定 loopback + SSH 隧道访问。
 
 ### 13. 启用真实交易模式
 
@@ -210,7 +273,7 @@ pkill -f "vite" || true
 cd /root/aipoly
 bash start.sh &
 sleep 5
-cd frontend && nohup npm run dev -- --host 0.0.0.0 > /tmp/vite.log 2>&1 &
+cd frontend && nohup npm run dev > /tmp/vite.log 2>&1 &   # 只监听回环，勿加 --host
 ```
 
 ### 查看日志

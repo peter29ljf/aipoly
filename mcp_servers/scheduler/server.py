@@ -72,4 +72,8 @@ def cancel_task(job_id: str) -> str:
 
 if __name__ == "__main__":
     port = int(os.environ.get("MCP_PORT", "8103"))
-    mcp.run(transport="sse", host="0.0.0.0", port=port)
+    # 默认只监听回环。这些服务没有任何认证，任何能连上的人都能
+    # 以服务自带的 AIPM_TOKEN 调用内部 API。远程访问请用 SSH 隧道：
+    #   ssh -L 8101:127.0.0.1:8101 root@<host>
+    host = os.environ.get("MCP_HOST", "127.0.0.1")
+    mcp.run(transport="sse", host=host, port=port)
