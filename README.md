@@ -32,15 +32,42 @@ ssh -L 8101:127.0.0.1:8101 -L 8102:127.0.0.1:8102 -L 8103:127.0.0.1:8103 \
 ssh -L 5173:127.0.0.1:5173 root@<host>   # 然后打开 http://localhost:5173
 ```
 
-### 3. 私钥：这台主机就是热钱包主机
+### 3. 私钥：用 Session Key，不要把主密钥放上服务器
 
-本项目**运行时需要 `PRIVATE_KEY`**（py-clob-client 用它签名订单），无法“派生完 API 凭证就删掉”。因此持有它的主机必须按热钱包主机对待：
+每一笔 CLOB 订单都是 **EIP-712 签名**的，所以 bot 必须持有**某一把**能签名的密钥——换成 MetaMask 等外部钱包注册也改变不了这一点。你能选择的是**让它持有哪一把**。
+
+**推荐架构：主密钥离线，服务器上只放 Session Key。**
+
+```
+主钱包 (Deposit Wallet Owner)
+  └─ 私钥：硬件钱包 / 本地，永不上服务器
+       │  authorizeSessionKey(scope=CLOB, 180d)
+       ↓
+  Session Key  ──→  只有它进 data/.env
+```
+
+Session Key 是 Deposit Wallet owner 授权的独立签名者（[官方文档](https://docs.polymarket.com/trading/session-keys)，通过 Builder API 创建，会生成一对全新的 EVM 密钥）：
+
+| | |
+|---|---|
+| 能做 | 签订单、交易（可限定 scope 为 CLOB / Combos / All） |
+| **不能做** | **🔒 从 Deposit Wallet 提款或转出资金** |
+| 有效期 | 180 天 |
+| 撤销 | 立即失效，并自动取消该 key 的全部挂单 |
+
+**「不能转出资金」这一行是关键。** 本项目 2026-08 那次事故的手法是 `setApprovalForAll` + ERC-1155 批量转账——**一次资产转移**。如果当时 `.env` 里放的是 session key，那次攻击根本执行不了。
+
+> ⚠️ Session Key 仅支持 **Deposit Wallet**（2026-06 之后的架构）。早期通过 Magic Link / Google 登录创建的 **legacy Proxy Wallet 不支持**，需要迁移到新钱包。
+
+无论用哪种密钥，以下都适用：
 
 - `chmod 600 data/.env` —— 部署后立即执行
 - `.gitignore` 已排除 `data/.env`，**绝不要提交**
-- **使用独立的交易钱包，不要用主钱包**；只放你能承受全部损失的资金
-- 定期轮换 CLOB API 凭证（`create_or_derive_api_key` 可重新生成）
-- 一旦怀疑主机被入侵：该钱包和私钥**永久作废**，换新钱包，不要再向旧地址充值（攻击者的 sweeper 会持续扫走进账）
+- 使用**独立交易钱包**，只放你能承受全部损失的资金
+- 定期轮换；任何异常立即 revoke session key
+- 一旦怀疑主机被入侵：该钱包永久作废，**不要再向旧地址充值**（攻击者的 sweeper 会持续扫走进账）
+
+**残余风险：** session key 被盗，攻击者仍能用你的资金做恶意交易（例如对敲把钱输给自己）。所以限额和及时撤销依然必要——但它把「瞬间被搬空」降级成「需要经订单簿慢慢转移」，后者你有时间发现并阻断。
 
 ### 4. 修改默认密码
 
@@ -143,7 +170,11 @@ claude
 
 ### 7. 配置 Polymarket 钱包凭据
 
-> ⚠️ **写入后立即 `chmod 600 data/.env`。** 该文件含私钥，本项目运行时需要它，无法在派生出 API 凭证后删除。请使用独立交易钱包——见上方安全要点 §3。
+> ⚠️ **优先使用 Session Key，而不是主钱包私钥**——它不能转出资金，是本项目推荐的部署方式，见上方[安全要点 §3](#3-私钥用-session-key不要把主密钥放上服务器)。
+>
+> 下面 `PRIVATE_KEY` 一栏填 session key 的私钥即可（legacy Proxy Wallet 不支持 session key，只能填主私钥——那种情况下这台主机必须按热钱包主机对待）。
+>
+> **写入后立即 `chmod 600 data/.env`。**
 
 ```bash
 mkdir -p data
