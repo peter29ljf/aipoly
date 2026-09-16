@@ -1,0 +1,85 @@
+# aipoly frontend, served as a static build instead of the vite dev server.
+#
+# vite dev was doing two jobs: serving the SPA and proxying the API to the
+# backend on :8010 (see frontend/vite.config.ts). Caddy takes over both, which
+# lets the dev server — and its ~108 MB of node/esbuild — be shut down.
+#
+# Bound to loopback only. Nothing here is authenticated: the backend's .token
+# guards /_internal but /api/* answers any caller, so this must not listen on
+# a public interface. Reach it with an SSH tunnel:
+#
+#   ssh -L 5173:127.0.0.1:5173 root@<host>   then open http://localhost:5173
+
+# The explicit http:// scheme is required — without it Caddy turns on
+# automatic HTTPS for this address, issues itself a cert for 127.0.0.1, and
+# then rejects plain-HTTP callers with "Client sent an HTTP request to an
+# HTTPS server". Over loopback behind an SSH tunnel, TLS buys nothing.
+http://127.0.0.1:5173 {
+	# The host in the site address only controls Host matching — Caddy still
+	# listens on every interface without this. `bind` is what actually keeps
+	# the socket off the public IP.
+	bind 127.0.0.1
+
+	# The three prefixes vite used to proxy.
+	handle /api/* {
+		reverse_proxy 127.0.0.1:8010
+	}
+	handle /_internal/* {
+		reverse_proxy 127.0.0.1:8010
+	}
+	handle /health {
+		reverse_proxy 127.0.0.1:8010
+	}
+
+	# SPA: everything else falls back to index.html so client-side routes work.
+	handle {
+		root * /root/aipoly/frontend/dist
+		encode zstd gzip
+		try_files {path} /index.html
+		file_server
+	}
+
+	header {
+		X-Robots-Tag "noindex, nofollow"
+	}
+}
+
+# Public entry point for the aipoly UI. dash.pinpathadvisory.com resolves to
+# this host, so Caddy gets a Let's Encrypt certificate automatically.
+#
+# basic_auth is not optional here: the backend authenticates nothing on
+# /api/* (its .token guards only /_internal), so without this gate the whole
+# trading API would be open to anyone who finds the name.
+#
+# 口令哈希不入库（本仓库是公开的）：由环境变量 AIPOLY_DASH_HASH 注入，
+# 用 `caddy run --envfile <file>` 启动。生成哈希：
+#   caddy hash-password --plaintext '<口令>'
+# 明文凭证放在 /etc/pinpath/dash-credentials.txt (mode 600)，不进仓库。
+dash.pinpathadvisory.com {
+	basic_auth {
+		aipoly {env.AIPOLY_DASH_HASH}
+	}
+
+	handle /api/* {
+		reverse_proxy 127.0.0.1:8010
+	}
+	handle /_internal/* {
+		reverse_proxy 127.0.0.1:8010
+	}
+	handle /health {
+		reverse_proxy 127.0.0.1:8010
+	}
+
+	handle {
+		root * /root/aipoly/frontend/dist
+		encode zstd gzip
+		try_files {path} /index.html
+		file_server
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Robots-Tag "noindex, nofollow"
+		X-Content-Type-Options nosniff
+	}
+}
