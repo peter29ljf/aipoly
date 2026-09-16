@@ -3,6 +3,7 @@
 .env.local
 data/.token
 data/mcp.env
+data/claude_auth.env
 
 # Python
 __pycache__/
@@ -43,9 +44,16 @@ data/alerts.db
 data/trades.json
 
 # Logs & strategy state
+# 这些是策略运行态：持仓、盈亏、对话日志。仓库是公开的，一律不入库。
+# 注意 .gitignore 对「已被跟踪」的文件无效——新增规则时要配合
+# `git rm --cached <file>`，否则规则写了也不生效。
 strategies/*/logs/
 strategies/*/memory.md
 strategies/*/_meta.json
 strategies/*/CLAUDE.md
 strategies/*/portfolio.json
+strategies/*/strategy.md
+strategies/*/.mcp.json
+strategies/portfolio.json
 strategies/strategy/
+strategies/btc/
