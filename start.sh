@@ -5,6 +5,13 @@ cd /root/aipoly
 
 export PATH="$HOME/.local/bin:$PATH"
 
+# Claude CLI 授权：长期令牌优先于 ~/.claude/.credentials.json（后者是会话
+# 凭证，会过期且后台进程无法走浏览器刷新）。后端在此之后启动，因此
+# claude_runner 的子进程能直接继承。文件不存在时不报错——runner 会自己兜底读取。
+if [ -f data/claude_auth.env ]; then
+  set -a; source data/claude_auth.env; set +a
+fi
+
 BACKEND_PORT="${BACKEND_PORT:-8010}"
 export BACKEND_PORT
 
@@ -19,8 +26,12 @@ fi
 
 # 先启动后端（生成 .token）
 echo "Starting backend..."
+# Loopback only: /api/* has no authentication (the .token guards just
+# /_internal), so this must not be reachable from the internet. The browser
+# reaches it through Caddy, which serves frontend/dist and proxies /api,
+# /_internal and /health here — see deploy/aipoly.caddy.
 BACKEND_PORT="$BACKEND_PORT" .venv/bin/python3 -m uvicorn backend.main:app \
-  --host 0.0.0.0 --port "$BACKEND_PORT" \
+  --host 127.0.0.1 --port "$BACKEND_PORT" \
   --log-level info &
 BACKEND_PID=$!
 echo "Backend PID: $BACKEND_PID"

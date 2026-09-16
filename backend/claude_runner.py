@@ -16,6 +16,11 @@ from backend import chat_log, strategies as strat_module
 logger = logging.getLogger(__name__)
 
 STRATEGIES_DIR = Path(__file__).resolve().parent.parent / "strategies"
+AUTH_ENV_FILE = Path(__file__).resolve().parent.parent / "data" / "claude_auth.env"
+
+# 任一变量存在即可完成鉴权；OAuth 长期令牌是首选，因为它不随会话过期，
+# 而 ~/.claude/.credentials.json 里的会话凭证过期后后台进程无法走浏览器刷新。
+_AUTH_VARS = ("CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN")
 
 
 def _find_claude() -> str:
@@ -44,6 +49,35 @@ def _find_claude() -> str:
         if matches:
             return sorted(matches)[-1]  # pick latest version
     raise FileNotFoundError("claude CLI not found. Install Claude Code or add it to PATH.")
+
+
+def _apply_claude_auth(env: dict) -> None:
+    """确保子进程带有可用的 Claude 授权，缺失时抛出可读的中文错误。
+
+    start.sh 会 source data/claude_auth.env，但 cron / systemd / 手工拉起后端时
+    未必经过它，所以这里兜底再读一次文件。
+    """
+    if any(env.get(v) for v in _AUTH_VARS):
+        return
+
+    hint = (
+        "缺少 Claude 授权：请运行 `claude setup-token` 生成长期令牌，并写入 "
+        f"{AUTH_ENV_FILE}（格式 CLAUDE_CODE_OAUTH_TOKEN=sk-ant-oat...，权限 600）。"
+    )
+    if not AUTH_ENV_FILE.is_file():
+        raise RuntimeError(hint)
+
+    for line in AUTH_ENV_FILE.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, val = line.partition("=")
+        key = key.strip()
+        if key in _AUTH_VARS:
+            env[key] = val.strip().strip('"').strip("'")
+
+    if not any(env.get(v) for v in _AUTH_VARS):
+        raise RuntimeError(hint)
 
 
 _TRIGGER_PROMPTS = {
@@ -103,6 +137,7 @@ async def _run(sid: str, trigger: str, extra: dict):
             cmd = [
                 _find_claude(),
                 "-p", prompt,
+                "--model", "opus",  # 策略决策统一用 Opus，不随 CLI 默认值漂移
                 "--output-format", "stream-json",
                 "--verbose",
                 "--mcp-config", str(sid_dir / ".mcp.json"),
@@ -113,6 +148,7 @@ async def _run(sid: str, trigger: str, extra: dict):
 
             env = os.environ.copy()
             env["AIPM_TRADE_MODE"] = "live"
+            _apply_claude_auth(env)
             proc = await asyncio.create_subprocess_exec(
                 *cmd,
                 stdout=asyncio.subprocess.PIPE,
