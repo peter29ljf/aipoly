@@ -101,13 +101,27 @@ def get_midpoint(token_id: str) -> str:
 
 @mcp.tool()
 def get_orderbook(token_id: str) -> str:
-    """查询买卖盘深度（asks/bids）。"""
+    """查询买卖盘深度（asks/bids），最优档在前。"""
     book = get_book(token_id)
     if book is None:
         return json.dumps({"error": "无法获取订单簿", "token_id": token_id})
-    asks = book.get("asks", [])[:5]
-    bids = book.get("bids", [])[:5]
-    return json.dumps({"token_id": token_id, "asks": asks, "bids": bids})
+    # CLOB 返回的 asks 是价格**降序**、bids 是**升序**——两边都是最差档在前。
+    # 原来直接 [:5] 取前五，于是把最差的五档当成盘口报给 agent：买方看到的
+    # "最优卖价"是 0.995 而真实是 0.97，中间还显出一大段假的真空。agent 据此
+    # 判定数据自相矛盾、拒绝下单（判断没错，是这里在骗它）。
+    # trader.py 的下单路径各自排过序，所以真实成交价不受影响，只有这个展示工具错。
+    asks = sorted(book.get("asks") or [], key=lambda x: float(x.get("price") or 0))
+    bids = sorted(book.get("bids") or [], key=lambda x: float(x.get("price") or 0), reverse=True)
+    out = {
+        "token_id": token_id,
+        "asks": asks[:5],           # 升序：最低卖价在前
+        "bids": bids[:5],           # 降序：最高买价在前
+        "best_ask": float(asks[0]["price"]) if asks else None,
+        "best_bid": float(bids[0]["price"]) if bids else None,
+    }
+    if out["best_ask"] is not None and out["best_bid"] is not None:
+        out["spread"] = round(out["best_ask"] - out["best_bid"], 4)
+    return json.dumps(out, ensure_ascii=False)
 
 
 @mcp.tool()
