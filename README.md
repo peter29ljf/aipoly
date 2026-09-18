@@ -183,30 +183,29 @@ CLOB_API_KEY=你的API密钥
 CLOB_SECRET=你的API密钥Secret
 CLOB_PASS_PHRASE=你的API密钥Passphrase
 PRIVATE_KEY=你的钱包私钥（不含0x前缀）
-WALLET_ADDRESS=0x你的钱包地址
+WALLET_ADDRESS=0x你的Polymarket账户钱包地址
+SIGNATURE_TYPE=1
 CLOB_HOST=https://clob.polymarket.com
 EOF
 ```
 
-**如何获取 Polymarket API 凭据：**
-1. 登录 [polymarket.com](https://polymarket.com) 并完成 KYC
-2. 钱包地址即你的 Polygon 钱包地址
-3. 私钥从钱包导出（MetaMask → 账户详情 → 导出私钥）
-4. API Key/Secret/Passphrase 通过私钥自动派生，可用 `py-clob-client` 生成：
+**各字段怎么填：**
+
+| 注册方式 | 钱包类型 | `SIGNATURE_TYPE` | `PRIVATE_KEY` |
+|---|---|---|---|
+| 邮箱 / Google | Proxy Wallet | `1`（默认） | Polymarket 导出的私钥 |
+| 2026-05-04 前用 MetaMask / OKX 等浏览器钱包 | Safe Wallet | `2` | 该浏览器钱包账户的私钥 |
+| 2026-05-04 起新建 | Deposit Wallet | `3` —— **暂不支持**，见下 | — |
+
+- `WALLET_ADDRESS` 填 polymarket.com 个人菜单里显示的**账户钱包地址**，不是浏览器钱包地址。
+- 浏览器钱包一个助记词下可能有多个账户，只导出连接 Polymarket 的那一个账户的私钥，不要导助记词。
+- `SIGNATURE_TYPE=3` 会直接报错：`py-clob-client-v2` 把 API key 绑到 EOA，Deposit Wallet 下单会被拒（[issue #70](https://github.com/Polymarket/py-clob-client-v2/issues/70)），需迁移到官方新 SDK `polymarket-client`。
+
+**API Key/Secret/Passphrase** 由私钥派生。留空也行，后端首次下单时会自动派生；想提前固化到 `.env`：
 
 ```bash
-.venv/bin/python3 -c "
-from py_clob_client_v2 import ClobClient
-client = ClobClient(
-    host='https://clob.polymarket.com',
-    key='你的私钥',
-    chain_id=137
-)
-creds = client.create_or_derive_api_key()
-print('CLOB_API_KEY=', creds.api_key)
-print('CLOB_SECRET=', creds.api_secret)
-print('CLOB_PASS_PHRASE=', creds.api_passphrase)
-"
+.venv/bin/python3 scripts/derive_creds.py          # 写回 data/.env，终端只显示 api_key 首尾 4 位
+.venv/bin/python3 scripts/derive_creds.py --force  # 换账户后强制重新派生
 ```
 
 ### 8. 修复 start.sh 路径（已在 git 中修复，首次克隆无需此步）

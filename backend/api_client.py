@@ -165,22 +165,23 @@ def get_balance_via_client() -> Optional[dict]:
     try:
         from py_clob_client_v2 import ApiCreds, AssetType, BalanceAllowanceParams, ClobClient
 
-        from backend.poly_config import load_app_env
+        from backend.poly_config import (
+            get_funder_address,
+            get_private_key,
+            get_signature_type,
+            load_app_env,
+        )
 
         load_app_env()
         api_key = os.environ.get("CLOB_API_KEY")
         api_secret = os.environ.get("CLOB_SECRET")
         api_passphrase = os.environ.get("CLOB_PASS_PHRASE")
-        private_key = (os.environ.get("PRIVATE_KEY") or "").replace("0x", "")
-        wallet = os.environ.get("WALLET_ADDRESS")
         host = os.environ.get("CLOB_HOST", "https://clob.polymarket.com")
-        if not all([api_key, api_secret, api_passphrase, private_key, wallet]):
+        if not all([api_key, api_secret, api_passphrase]):
             return None
-
-        try:
-            signature_type = int(os.environ.get("SIGNATURE_TYPE", "1"))
-        except ValueError:
-            signature_type = 1
+        private_key = get_private_key()
+        wallet = get_funder_address()
+        signature_type = get_signature_type()
         creds = ApiCreds(
             api_key=api_key,
             api_secret=api_secret,
@@ -191,8 +192,21 @@ def get_balance_via_client() -> Optional[dict]:
         if not result:
             return None
         bal = int(result.get("balance") or 0)
-        allow = int(result.get("allowance") or 0)
-        return {"balance": bal / 1e6, "allowance": allow / 1e6}
+        # CLOB v2 返回的是 allowances——复数，按 spender 地址索引的字典；
+        # v1 的单数标量 allowance 已经没有了。读错字段会永远得到 0，进而让
+        # agent 以为没授权而不敢下单（授权其实是满的）。
+        allowances = result.get("allowances")
+        if isinstance(allowances, dict) and allowances:
+            allow = min(int(v) for v in allowances.values())
+        else:
+            allow = int(result.get("allowance") or 0)  # 兼容旧字段
+        # 授权通常设成 MAX_UINT256。不能用 float("inf") 表示——json.dumps 会写成
+        # Infinity，那不是合法 JSON，下游 MCP 解析会炸。这里保留数值并另给一个布尔位。
+        return {
+            "balance": bal / 1e6,
+            "allowance": allow / 1e6,
+            "allowance_unlimited": allow >= 2 ** 255,
+        }
     except Exception as e:
         logger.warning("get_balance_via_client failed: %s", e)
         return None

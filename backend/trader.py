@@ -8,7 +8,16 @@ import logging
 import os
 from typing import Optional
 
-from backend.poly_config import get_env_path, get_config_path, Config, load_app_env
+from backend.poly_config import (
+    Config,
+    describe_signature_type,
+    get_config_path,
+    get_env_path,
+    get_funder_address,
+    get_private_key as _private_key,
+    get_signature_type,
+    load_app_env,
+)
 from backend.api_client import get_midpoint, get_book, get_positions
 
 logger = logging.getLogger(__name__)
@@ -22,13 +31,6 @@ def _get_config() -> Config:
     return Config.from_file()
 
 
-def _signature_type() -> int:
-    try:
-        return int(os.environ.get("SIGNATURE_TYPE", "1"))
-    except ValueError:
-        return 1
-
-
 def _v2_client():
     try:
         from py_clob_client_v2 import ApiCreds, ClobClient
@@ -36,10 +38,8 @@ def _v2_client():
         raise RuntimeError("未安装 py-clob-client-v2，请运行 pip install py-clob-client-v2") from e
 
     host = os.environ.get("CLOB_HOST", "https://clob.polymarket.com")
-    key = (os.environ.get("PRIVATE_KEY") or "").replace("0x", "")
-    wallet = os.environ.get("WALLET_ADDRESS")
-    if not all([key, wallet]):
-        raise ValueError("未配置 PRIVATE_KEY 或 WALLET_ADDRESS")
+    key = _private_key()
+    wallet = get_funder_address()
 
     api_key = os.environ.get("CLOB_API_KEY")
     api_secret = os.environ.get("CLOB_SECRET")
@@ -48,7 +48,11 @@ def _v2_client():
     if all([api_key, api_secret, api_passphrase]):
         creds = ApiCreds(api_key=api_key, api_secret=api_secret, api_passphrase=api_passphrase)
 
-    sig_type = _signature_type()
+    sig_type = get_signature_type()
+    logger.info(
+        "CLOB 客户端：signature_type=%s(%s) funder=%s",
+        sig_type, describe_signature_type(sig_type), wallet,
+    )
     client = ClobClient(host=host, key=key, chain_id=137, creds=creds, funder=wallet, signature_type=sig_type)
     if creds is None:
         creds = client.create_or_derive_api_key()
@@ -224,9 +228,10 @@ def market_sell(
     """
     _load_env()
     cfg = config or _get_config()
-    wallet = os.environ.get("WALLET_ADDRESS")
-    if not wallet:
-        return {"success": False, "error": "未配置 WALLET_ADDRESS"}
+    try:
+        wallet = get_funder_address()
+    except ValueError as e:
+        return {"success": False, "error": str(e)}
 
     position_size = _get_position_size(wallet, token_id)
     if position_size <= 0:

@@ -29,47 +29,88 @@ TOKEN_FILE=/etc/aipoly/claude.env
 : "${CLAUDE_CODE_OAUTH_TOKEN:?claude.env 里没有 CLAUDE_CODE_OAUTH_TOKEN}"
 
 # agent 每次运行都要能写策略文档和日志，其余一律只读。
-install -d -o aipoly-core -g aipoly-agent -m 770 "$SANDBOX/logs"
+# 注意：本脚本经 sudo 从 bot 进程里启动，因而**继承 bot 的挂载命名空间**——
+# 那里 ProtectSystem=strict 且没有 ReadWritePaths，整个文件系统只读。所以这里
+# 一个字节都不能写。install -d 在目录已存在、属性无需变更时是空操作，可以留；
+# 目录缺失则明确报错，而不是让 claude 后面莫名其妙地失败。
+install -d -o aipoly-core -g aipoly-agent -m 770 "$SANDBOX/logs" 2>/dev/null || true
+[ -d "$SANDBOX/home" ] || { echo "沙箱缺少 home 目录：$SANDBOX/home" >&2; exit 2; }
 
-exec systemd-run --quiet --pipe --collect --wait \
-	--unit="aipoly-agent-${CHAT_ID}-$$" \
-	--uid=aipoly-agent --gid=aipoly-agent \
-	--working-directory="$SANDBOX" \
-	\
-	`# ---- 文件系统 ----` \
-	--property=ProtectSystem=strict \
-	--property=ProtectHome=yes \
-	--property=ReadWritePaths="$SANDBOX" \
-	--property=InaccessiblePaths=/etc/aipoly \
-	--property=PrivateTmp=yes \
-	\
-	`# ---- 提权与内核 ----` \
-	--property=NoNewPrivileges=yes \
-	--property=RestrictSUIDSGID=yes \
-	--property=ProtectKernelTunables=yes \
-	--property=ProtectKernelModules=yes \
-	--property=ProtectControlGroups=yes \
-	--property=RestrictNamespaces=yes \
-	--property=LockPersonality=yes \
-	\
-	`# ---- 资源上限（整机仅 1.8G，必须封顶）----` \
-	--property=MemoryMax=800M \
-	--property=TasksMax=128 \
-	--property=RuntimeMaxSec=600 \
-	\
-	--setenv=HOME="$SANDBOX/home" \
-	--setenv=CLAUDE_CONFIG_DIR="$SANDBOX/home/.claude" \
-	--setenv=CLAUDE_CODE_OAUTH_TOKEN="$CLAUDE_CODE_OAUTH_TOKEN" \
-	--setenv=PATH=/usr/local/bin:/usr/bin:/bin \
-	--setenv=LANG=C.UTF-8 \
-	\
-	/usr/local/bin/claude \
-	-p "$PROMPT" \
-	--model opus \
-	--output-format text \
-	--mcp-config "$SANDBOX/.mcp.json" \
-	\
-	`# 只给 MCP 工具。没有 Bash / Write / Edit / Read —— 这是与旧版最重要的差别：` \
-	`# 旧版 --allowedTools 含 Bash 且以 root 运行，一条聊天消息就等于 root 任意命令。` \
-	--allowedTools "mcp__poly_trade__*,mcp__portfolio__*,mcp__scheduler__*,mcp__sweep__*,mcp__strategy_doc__*" \
-	--permission-mode acceptEdits
+# ---- 并发保护 ----------------------------------------------------------
+# 对沙箱目录本身加锁，用只读 fd——只读文件系统下也能用，不需要创建锁文件。
+# 粒度是「每个策略沙箱一把锁」而非按 chat 分：同一沙箱里并行跑两个 agent，
+# 本来就会同时写 strategy.md / memory.md，按 chat 分反而挡不住真正的冲突。
+exec 9<"$SANDBOX"
+if ! flock -n 9; then
+	echo "该策略上一次运行还没结束，请等它完成。" >&2
+	exit 4
+fi
+
+# ---- 多轮对话 ----------------------------------------------------------
+# 每次调用都是一个新的 `claude -p`，默认互不相识。把同一个 chat 的历次调用挂到
+# 同一个 session 上，Telegram 那头才像在对话。
+#
+# session id 由 (策略, chat_id) 确定性推导。用 uuid5 而不是把 sha256 截断成
+# UUID 形状：后者版本位/变体位不合法，一旦 claude 做 RFC-4122 校验就会被拒。
+#
+# 不落 marker 文件记录「建没建过」——那需要写盘，而这里只读。改为先试 --resume，
+# 失败再 --session-id 创建。两种失败信息可区分且都很快：
+#   --resume  不存在  → "No conversation found with session ID"
+#   --session-id 已存在 → "Session ID ... is already in use."
+SESSION_ID="$(printf '%s' "$SID:$CHAT_ID" | python3 -c '
+import sys, uuid
+print(uuid.uuid5(uuid.NAMESPACE_URL, "urn:aipoly:" + sys.stdin.read()))')"
+
+run_agent() {
+	systemd-run --quiet --pipe --collect --wait \
+		--unit="aipoly-agent-${CHAT_ID}-$$" \
+		--uid=aipoly-agent --gid=aipoly-agent \
+		--working-directory="$SANDBOX" \
+		\
+		`# ---- 文件系统 ----` \
+		--property=ProtectSystem=strict \
+		--property=ProtectHome=yes \
+		--property=ReadWritePaths="$SANDBOX" \
+		--property=InaccessiblePaths=/etc/aipoly \
+		--property=PrivateTmp=yes \
+		\
+		`# ---- 提权与内核 ----` \
+		--property=NoNewPrivileges=yes \
+		--property=RestrictSUIDSGID=yes \
+		--property=ProtectKernelTunables=yes \
+		--property=ProtectKernelModules=yes \
+		--property=ProtectControlGroups=yes \
+		--property=RestrictNamespaces=yes \
+		--property=LockPersonality=yes \
+		\
+		`# ---- 资源上限（整机仅 1.8G，必须封顶）----` \
+		--property=MemoryMax=800M \
+		--property=TasksMax=128 \
+		--property=RuntimeMaxSec=600 \
+		\
+		--setenv=HOME="$SANDBOX/home" \
+		--setenv=CLAUDE_CONFIG_DIR="$SANDBOX/home/.claude" \
+		--setenv=CLAUDE_CODE_OAUTH_TOKEN="$CLAUDE_CODE_OAUTH_TOKEN" \
+		--setenv=PATH=/usr/local/bin:/usr/bin:/bin \
+		--setenv=LANG=C.UTF-8 \
+		\
+		/usr/local/bin/claude \
+		-p "$PROMPT" \
+		--model opus \
+		--output-format text \
+		--mcp-config "$SANDBOX/.mcp.json" \
+		\
+		`# 只给 MCP 工具。没有 Bash / Write / Edit / Read —— 这是与旧版最重要的差别：` \
+		`# 旧版 --allowedTools 含 Bash 且以 root 运行，一条聊天消息就等于 root 任意命令。` \
+		--allowedTools "mcp__poly_trade__*,mcp__portfolio__*,mcp__scheduler__*,mcp__sweep__*,mcp__strategy_doc__*" \
+		--permission-mode acceptEdits \
+		"$@"
+}
+
+# 先续接；该 session 还不存在就创建。
+OUT="$(run_agent --resume "$SESSION_ID" 2>&1)" && { printf '%s\n' "$OUT"; exit 0; }
+if printf '%s' "$OUT" | grep -q "No conversation found with session ID"; then
+	OUT="$(run_agent --session-id "$SESSION_ID" 2>&1)" && { printf '%s\n' "$OUT"; exit 0; }
+fi
+printf '%s\n' "$OUT" >&2
+exit 1
