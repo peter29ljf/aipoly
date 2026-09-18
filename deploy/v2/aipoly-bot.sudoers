@@ -1,0 +1,6 @@
+# 装到 /etc/sudoers.d/aipoly-bot，权限 0440。
+# bot 能且只能以 root 运行这一个启动器，不带任何参数自由度之外的权限。
+# 脚本本身是 root:root 0755，aipoly-bot 无写权限，所以改不了沙箱参数。
+aipoly-bot ALL=(root) NOPASSWD: /usr/local/sbin/aipoly-run-agent
+Defaults:aipoly-bot !requiretty
+Defaults:aipoly-bot env_keep -= "*"

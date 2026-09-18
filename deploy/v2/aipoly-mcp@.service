@@ -1,0 +1,31 @@
+[Unit]
+Description=aipoly MCP 服务 %i
+After=aipoly-core.service
+Requires=aipoly-core.service
+
+[Service]
+Type=exec
+User=aipoly-mcp
+Group=aipoly-mcp
+WorkingDirectory=/opt/aipoly
+# 只拿 AIPM_TOKEN。注意这里没有 wallet.env —— MCP 层不需要、也不该碰私钥。
+EnvironmentFile=/etc/aipoly/mcp.env
+Environment=API_BASE=http://127.0.0.1:8010
+ExecStart=/opt/aipoly/.venv/bin/python3 -m mcp_servers.%i.server
+Restart=always
+RestartSec=5
+
+ProtectSystem=strict
+ProtectHome=yes
+InaccessiblePaths=/etc/aipoly/wallet.env
+PrivateTmp=yes
+NoNewPrivileges=yes
+RestrictSUIDSGID=yes
+ProtectKernelTunables=yes
+RestrictNamespaces=yes
+LockPersonality=yes
+MemoryMax=150M
+TasksMax=32
+
+[Install]
+WantedBy=multi-user.target

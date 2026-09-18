@@ -1,0 +1,32 @@
+[Unit]
+Description=aipoly Telegram bot — 唯一控制面
+After=network-online.target aipoly-core.service
+Wants=network-online.target
+
+[Service]
+Type=exec
+User=aipoly-bot
+Group=aipoly-bot
+WorkingDirectory=/opt/aipoly
+EnvironmentFile=/etc/aipoly/telegram.env
+ExecStart=/opt/aipoly/.venv/bin/python3 -m bot.telegram_bot
+Restart=always
+RestartSec=10
+
+ProtectSystem=strict
+ProtectHome=yes
+InaccessiblePaths=/etc/aipoly/wallet.env /etc/aipoly/claude.env
+PrivateTmp=yes
+# 注意：这里**不能**设 NoNewPrivileges=yes。
+# bot 需要 sudo 调用 aipoly-run-agent 拉起沙箱，而 NoNewPrivileges 会让
+# sudo 直接失败。代价由 sudoers 里的白名单补偿：bot 只能以 root 执行
+# 那一个脚本，且脚本自身 bot 不可写。
+RestrictSUIDSGID=yes
+ProtectKernelTunables=yes
+RestrictNamespaces=yes
+LockPersonality=yes
+MemoryMax=200M
+TasksMax=64
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,75 @@
+#!/usr/bin/env bash
+# 在沙箱里跑一次策略 agent。由 telegram bot 经 sudo 调用：
+#
+#   echo "<prompt>" | sudo -n /usr/local/sbin/aipoly-run-agent <chat_id>
+#
+# 这个文件 root 所有、aipoly-bot 不可写，是刻意的：下面每一条沙箱属性都固定
+# 在这里，而不是由调用方拼装。被攻破的 bot 只能传一个 prompt，无法给自己松绑。
+#
+# prompt 从 stdin 读、凭证以 root 读，两者都不出现在 argv 里——否则同机任何
+# 用户 `ps` 一下就看见了。
+set -euo pipefail
+
+CHAT_ID="${1:-}"
+[[ "$CHAT_ID" =~ ^-?[0-9]+$ ]] || { echo "bad chat id" >&2; exit 2; }
+
+STATE=/var/lib/aipoly
+SID="${AIPOLY_SID:-sweep}"
+SANDBOX="$STATE/strategies/$SID"
+[ -d "$SANDBOX" ] || { echo "策略目录不存在：$SANDBOX" >&2; exit 2; }
+
+PROMPT="$(cat)"
+[ -n "$PROMPT" ] || { echo "空 prompt" >&2; exit 2; }
+
+# Claude 授权以 root 读取，随后经 --setenv 注入沙箱。
+TOKEN_FILE=/etc/aipoly/claude.env
+[ -s "$TOKEN_FILE" ] || { echo "未配置 $TOKEN_FILE" >&2; exit 3; }
+# shellcheck disable=SC1090
+. "$TOKEN_FILE"
+: "${CLAUDE_CODE_OAUTH_TOKEN:?claude.env 里没有 CLAUDE_CODE_OAUTH_TOKEN}"
+
+# agent 每次运行都要能写策略文档和日志，其余一律只读。
+install -d -o aipoly-core -g aipoly-agent -m 770 "$SANDBOX/logs"
+
+exec systemd-run --quiet --pipe --collect --wait \
+	--unit="aipoly-agent-${CHAT_ID}-$$" \
+	--uid=aipoly-agent --gid=aipoly-agent \
+	--working-directory="$SANDBOX" \
+	\
+	`# ---- 文件系统 ----` \
+	--property=ProtectSystem=strict \
+	--property=ProtectHome=yes \
+	--property=ReadWritePaths="$SANDBOX" \
+	--property=InaccessiblePaths=/etc/aipoly \
+	--property=PrivateTmp=yes \
+	\
+	`# ---- 提权与内核 ----` \
+	--property=NoNewPrivileges=yes \
+	--property=RestrictSUIDSGID=yes \
+	--property=ProtectKernelTunables=yes \
+	--property=ProtectKernelModules=yes \
+	--property=ProtectControlGroups=yes \
+	--property=RestrictNamespaces=yes \
+	--property=LockPersonality=yes \
+	\
+	`# ---- 资源上限（整机仅 1.8G，必须封顶）----` \
+	--property=MemoryMax=800M \
+	--property=TasksMax=128 \
+	--property=RuntimeMaxSec=600 \
+	\
+	--setenv=HOME="$SANDBOX/home" \
+	--setenv=CLAUDE_CONFIG_DIR="$SANDBOX/home/.claude" \
+	--setenv=CLAUDE_CODE_OAUTH_TOKEN="$CLAUDE_CODE_OAUTH_TOKEN" \
+	--setenv=PATH=/usr/local/bin:/usr/bin:/bin \
+	--setenv=LANG=C.UTF-8 \
+	\
+	/usr/local/bin/claude \
+	-p "$PROMPT" \
+	--model opus \
+	--output-format text \
+	--mcp-config "$SANDBOX/.mcp.json" \
+	\
+	`# 只给 MCP 工具。没有 Bash / Write / Edit / Read —— 这是与旧版最重要的差别：` \
+	`# 旧版 --allowedTools 含 Bash 且以 root 运行，一条聊天消息就等于 root 任意命令。` \
+	--allowedTools "mcp__poly_trade__*,mcp__portfolio__*,mcp__scheduler__*,mcp__sweep__*,mcp__strategy_doc__*" \
+	--permission-mode acceptEdits

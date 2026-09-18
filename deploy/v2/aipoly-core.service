@@ -1,0 +1,37 @@
+[Unit]
+Description=aipoly core — 下单执行层（唯一能读私钥的组件）
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=exec
+User=aipoly-core
+Group=aipoly-core
+WorkingDirectory=/opt/aipoly
+# 私钥只在这里出现。文件是 root:aipoly-core 640，其他服务用户读不到。
+EnvironmentFile=/etc/aipoly/wallet.env
+EnvironmentFile=/etc/aipoly/mcp.env
+Environment=AIPOLY_STATE=/var/lib/aipoly
+# 只监听 loopback。没有反向代理、没有公网入口——v2 的整个 Web 面被移除了。
+ExecStart=/opt/aipoly/.venv/bin/python3 -m uvicorn backend.main:app --host 127.0.0.1 --port 8010 --log-level info
+Restart=always
+RestartSec=5
+
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/var/lib/aipoly
+PrivateTmp=yes
+NoNewPrivileges=yes
+RestrictSUIDSGID=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictNamespaces=yes
+LockPersonality=yes
+# 只允许它连出去（Polymarket API）和 loopback，不允许监听公网。
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+MemoryMax=400M
+TasksMax=64
+
+[Install]
+WantedBy=multi-user.target
