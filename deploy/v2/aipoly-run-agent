@@ -30,8 +30,39 @@ TOKEN_FILE=/etc/aipoly/claude.env
 
 # agent 每次运行都要能写策略文档和日志，其余一律只读。
 install -d -o aipoly-core -g aipoly-agent -m 770 "$SANDBOX/logs"
+install -d -o aipoly-agent -g aipoly-agent -m 700 "$SANDBOX/home"
+install -d -o aipoly-agent -g aipoly-agent -m 700 "$SANDBOX/sessions"
 
-exec systemd-run --quiet --pipe --collect --wait \
+# ---- 多轮对话 ----------------------------------------------------------
+# 每次调用都是一个新的 `claude -p`，默认互不相识。要让 Telegram 这头感觉是在
+# 对话，就得把同一个 chat 的历次调用挂到同一个 session 上。
+#
+# session id 由 (策略, chat_id) 确定性推导，不落随机值：这样即使 marker 丢了
+# 也能重新算出同一个 id。marker 只用来判断"这个 session 建过没有"——首次用
+# --session-id 创建，之后用 --resume 续接。
+# 用 uuid5 而不是直接把 sha256 截断成 UUID 形状：后者的版本位/变体位不合法，
+# 一旦 claude 对 --session-id 做 RFC-4122 校验就会被拒。
+SESSION_ID="$(printf '%s' "$SID:$CHAT_ID" | python3 -c '
+import sys, uuid
+print(uuid.uuid5(uuid.NAMESPACE_URL, "urn:aipoly:" + sys.stdin.read()))')"
+MARKER="$SANDBOX/sessions/$CHAT_ID"
+
+if [ -f "$MARKER" ] && [ "$(cat "$MARKER" 2>/dev/null)" = "$SESSION_ID" ]; then
+	SESSION_ARGS=(--resume "$SESSION_ID")
+else
+	SESSION_ARGS=(--session-id "$SESSION_ID")
+fi
+
+# 同一个 chat 的两次调用若同时 resume 同一 session，会互相踩坏会话记录。
+# 串行化：拿不到锁就直接告诉用户上一条还在跑，而不是排队堆积。
+exec 9>"$SANDBOX/sessions/.$CHAT_ID.lock"
+if ! flock -n 9; then
+	echo "上一条消息还在处理中，请等它结束。" >&2
+	exit 4
+fi
+
+rc=0
+systemd-run --quiet --pipe --collect --wait \
 	--unit="aipoly-agent-${CHAT_ID}-$$" \
 	--uid=aipoly-agent --gid=aipoly-agent \
 	--working-directory="$SANDBOX" \
@@ -72,4 +103,13 @@ exec systemd-run --quiet --pipe --collect --wait \
 	`# 只给 MCP 工具。没有 Bash / Write / Edit / Read —— 这是与旧版最重要的差别：` \
 	`# 旧版 --allowedTools 含 Bash 且以 root 运行，一条聊天消息就等于 root 任意命令。` \
 	--allowedTools "mcp__poly_trade__*,mcp__portfolio__*,mcp__scheduler__*,mcp__sweep__*,mcp__strategy_doc__*" \
-	--permission-mode acceptEdits
+	--permission-mode acceptEdits \
+	"${SESSION_ARGS[@]}" || rc=$?
+
+# marker 只在成功后写。失败时不写，下次仍走 --session-id 重建——否则一次失败的
+# 创建会让之后每次都去 resume 一个并不存在的 session，永久卡死这个 chat。
+if [ "$rc" -eq 0 ]; then
+	printf '%s\n' "$SESSION_ID" > "$MARKER"
+	chown aipoly-agent:aipoly-agent "$MARKER"
+fi
+exit "$rc"

@@ -14,6 +14,10 @@ if not AIPM_TOKEN:
     )
 
 TIMEOUT = 15.0
+# 下单要经后端打 CLOB：签名、提交、等撮合，15 秒常常不够。超时最坏的情况不是
+# "没成交"，而是**成交了但调用方以为失败**——agent 据此重试就会重复下单。
+# 所以写类调用单独放宽，宁可多等，也不要制造这种歧义。
+TRADE_TIMEOUT = 120.0
 
 
 def _headers() -> dict:
@@ -23,14 +27,16 @@ def _headers() -> dict:
     return h
 
 
-def api_get(path: str, params: dict | None = None) -> dict:
-    r = httpx.get(f"{API_BASE}{path}", params=params, headers=_headers(), timeout=TIMEOUT)
+def api_get(path: str, params: dict | None = None, timeout: float | None = None) -> dict:
+    r = httpx.get(f"{API_BASE}{path}", params=params, headers=_headers(),
+                  timeout=timeout or TIMEOUT)
     r.raise_for_status()
     return r.json()
 
 
-def api_post(path: str, payload: dict) -> dict:
-    r = httpx.post(f"{API_BASE}{path}", json=payload, headers=_headers(), timeout=TIMEOUT)
+def api_post(path: str, payload: dict, timeout: float | None = None) -> dict:
+    r = httpx.post(f"{API_BASE}{path}", json=payload, headers=_headers(),
+                   timeout=timeout or TIMEOUT)
     r.raise_for_status()
     return r.json()
 

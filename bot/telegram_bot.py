@@ -15,6 +15,7 @@
 import html
 import logging
 import os
+import re
 import subprocess
 import time
 
@@ -24,6 +25,27 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
 )
+class _RedactToken(logging.Filter):
+    """把日志里的 Telegram token 抹成 bot<redacted>。
+
+    httpx 在 INFO 级别记完整请求 URL，而 token 就在路径里（/bot<TOKEN>/getUpdates），
+    等于把 token 明文写进 journald。这里只抹密钥、保留状态码——直接把 httpx 降到
+    WARNING 也能堵住泄露，但那样连 409 Conflict 这种关键诊断都看不见了。
+    """
+
+    _PAT = re.compile(r"bot\d{6,12}:[A-Za-z0-9_-]{30,}")
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        if record.args:
+            record.msg = record.getMessage()
+            record.args = ()
+        record.msg = self._PAT.sub("bot<redacted>", str(record.msg))
+        return True
+
+
+for _h in logging.getLogger().handlers:
+    _h.addFilter(_RedactToken())
+
 logger = logging.getLogger("aipoly.bot")
 
 TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()
@@ -178,11 +200,14 @@ def handle(msg: dict) -> None:
         cmd_status(chat_id)
     elif cmd == "/positions":
         cmd_positions(chat_id)
-    elif cmd in ("/pause", "/resume", "/stop"):
+    elif cmd in ("/pause", "/resume", "/stop", "/pnl"):
+        # /pnl 之前只写在 HELP 里、没接任何分支，发过去只会收到"未知命令"。
+        # 它本质上是个查询，交给 agent 比再写一套聚合逻辑更直接。
         run_agent(chat_id, {
             "/pause": "暂停每日自动扫描任务，确认后报告结果。",
             "/resume": "恢复每日自动扫描任务，确认后报告结果。",
             "/stop": "紧急停止：取消全部定时任务，不要下任何新单，报告取消了哪些。",
+            "/pnl": "查询当前持仓与已结算盈亏，汇总成简短报告。不要下任何单。",
         }[cmd])
     elif cmd.startswith("/"):
         send(chat_id, f"未知命令 {html.escape(cmd)}。/help 查看可用命令。")

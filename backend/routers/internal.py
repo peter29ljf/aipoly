@@ -178,3 +178,142 @@ def internal_cancel_schedule(job_id: str, x_aipm_token: str | None = Header(defa
     _auth(x_aipm_token)
     from backend import scheduler
     return {"ok": scheduler.cancel_job(job_id)}
+
+
+# ── 余额 / 持仓 / 交易 ────────────────────────────────────────────────────────
+#
+# 这些端点只在 aipoly-core 里跑，它是唯一能读 /etc/aipoly/wallet.env 的组件。
+# MCP 层（aipoly-mcp）被 InaccessiblePaths 挡在私钥之外，所以它不能自己下单，
+# 只能把请求转发到这里。sim/live 闸门也在这一层——闸门必须和真正执行下单的
+# 代码在同一个进程里，否则就是个摆设。
+
+def _load_wallet_env():
+    from backend.poly_config import load_app_env
+    load_app_env()
+
+
+@router.get("/balance")
+def internal_balance(x_aipm_token: str | None = Header(default=None)):
+    _auth(x_aipm_token)
+    _load_wallet_env()
+    from backend.api_client import get_balance_via_client
+    result = get_balance_via_client()
+    if result is None:
+        raise HTTPException(503, "无法获取余额：钱包凭据缺失或 CLOB 不可达")
+    return result
+
+
+@router.get("/positions")
+def internal_positions(size_threshold: str = "0", x_aipm_token: str | None = Header(default=None)):
+    _auth(x_aipm_token)
+    _load_wallet_env()
+    from backend.api_client import get_positions
+    from backend.poly_config import get_funder_address
+    try:
+        wallet = get_funder_address()
+    except ValueError as e:
+        raise HTTPException(503, str(e))
+    return {"wallet": wallet, "positions": get_positions(wallet, size_threshold)}
+
+
+class MarketOrderPayload(BaseModel):
+    token_id: str
+    amount: float          # BUY 时是 USDC 金额，SELL 时是 shares 数量
+
+
+class LimitOrderPayload(BaseModel):
+    token_id: str
+    price: float
+    size: float
+
+
+def _sim_note(**extra):
+    d = {
+        "mode": "SIMULATION",
+        "status": "simulated_success",
+        "note": "⚠️ 模拟交易，未执行真实链上交易。改 AIPM_TRADE_MODE=live 启用真实交易。",
+    }
+    d.update(extra)
+    return d
+
+
+def _trade_mode():
+    from backend.poly_config import get_trade_mode
+    try:
+        return get_trade_mode()
+    except ValueError as e:
+        raise HTTPException(500, str(e))
+
+
+@router.post("/trade/market_buy")
+def internal_market_buy(payload: MarketOrderPayload, x_aipm_token: str | None = Header(default=None)):
+    _auth(x_aipm_token)
+    _load_wallet_env()
+    from backend.api_client import get_midpoint
+    if _trade_mode() == "sim":
+        mid = get_midpoint(payload.token_id)
+        return _sim_note(
+            token_id=payload.token_id, amount_usdc=payload.amount, price=mid,
+            shares_received=round(payload.amount / mid, 4) if mid else 0,
+        )
+    from backend.trader import market_buy
+    from backend.poly_config import Config
+    return market_buy(payload.token_id, payload.amount, Config.from_file())
+
+
+@router.post("/trade/market_sell")
+def internal_market_sell(payload: MarketOrderPayload, x_aipm_token: str | None = Header(default=None)):
+    _auth(x_aipm_token)
+    _load_wallet_env()
+    from backend.api_client import get_midpoint
+    if _trade_mode() == "sim":
+        mid = get_midpoint(payload.token_id)
+        return _sim_note(
+            token_id=payload.token_id, shares=payload.amount, price=mid,
+            usdc_received=round(payload.amount * mid, 4) if mid else 0,
+        )
+    from backend.trader import market_sell
+    from backend.poly_config import Config
+    return market_sell(payload.token_id, payload.amount, Config.from_file())
+
+
+@router.post("/trade/limit_buy")
+def internal_limit_buy(payload: LimitOrderPayload, x_aipm_token: str | None = Header(default=None)):
+    _auth(x_aipm_token)
+    _load_wallet_env()
+    if _trade_mode() == "sim":
+        return _sim_note(token_id=payload.token_id, price=payload.price, size=payload.size, side="BUY")
+    from backend.trader import limit_buy
+    return limit_buy(payload.token_id, payload.price, payload.size)
+
+
+@router.post("/trade/limit_sell")
+def internal_limit_sell(payload: LimitOrderPayload, x_aipm_token: str | None = Header(default=None)):
+    _auth(x_aipm_token)
+    _load_wallet_env()
+    if _trade_mode() == "sim":
+        return _sim_note(token_id=payload.token_id, price=payload.price, size=payload.size, side="SELL")
+    from backend.trader import limit_sell
+    return limit_sell(payload.token_id, payload.price, payload.size)
+
+
+@router.get("/orders")
+def internal_list_orders(token_id: str = "", x_aipm_token: str | None = Header(default=None)):
+    _auth(x_aipm_token)
+    _load_wallet_env()
+    from backend.trader import list_open_orders
+    return list_open_orders(token_id or None)
+
+
+@router.delete("/orders/{order_id}")
+def internal_cancel_order(order_id: str, x_aipm_token: str | None = Header(default=None)):
+    _auth(x_aipm_token)
+    _load_wallet_env()
+    from backend.trader import cancel_limit_order
+    return cancel_limit_order(order_id)
+
+
+@router.get("/trade_mode")
+def internal_trade_mode(x_aipm_token: str | None = Header(default=None)):
+    _auth(x_aipm_token)
+    return {"mode": _trade_mode()}
